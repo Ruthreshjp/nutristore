@@ -11,7 +11,7 @@ function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const { hasNewNotifications, newNotificationCount } = useNotifications();
+  const { hasNewNotifications } = useNotifications();
   const [newOrderCount, setNewOrderCount] = useState(0);
 
   // Sync search query with URL on page load
@@ -44,7 +44,14 @@ function Navbar() {
     fetchOrderCount();
     const interval = setInterval(fetchOrderCount, 30000); // Poll every 30 seconds
     return () => clearInterval(interval);
-  }, [user]); // Re-run if user changes
+  }, [user]);
+
+  // Clear cart notification when visiting cart page
+  useEffect(() => {
+    if (location.pathname === '/cart') {
+      localStorage.setItem('cartVisited', 'true');
+    }
+  }, [location.pathname]);
 
   const handleLogout = () => {
     logout();
@@ -59,6 +66,9 @@ function Navbar() {
     setSearchQuery('');
     setIsMenuOpen(false); // Close mobile menu after search
   };
+
+  const cartItems = JSON.parse(localStorage.getItem('cart') || '[]');
+  const cartVisited = localStorage.getItem('cartVisited') === 'true';
 
   return (
     <nav className="relative bg-gradient-to-r from-indigo-600/80 to-cyan-400/80 backdrop-blur-md text-white py-4 shadow-lg border-b border-cyan-500/30">
@@ -89,16 +99,13 @@ function Navbar() {
                 <FaHome className="text-xl" />
               </Link>
               <Link to="/products" className="hover:text-yellow-300 font-bold transition duration-300">Products</Link>
-              <Link to="/cart" className="hover:text-yellow-300 font-bold transition duration-300">
+              <Link to="/cart" className="relative hover:text-yellow-300 font-bold transition duration-300">
                 <FaShoppingCart className="text-xl inline mr-1" /> Cart
+                {cartItems.length > 0 && !cartVisited && <span className="notification-dot" />}
               </Link>
               <Link to="/your-orders" className="relative hover:text-yellow-300 font-bold transition duration-300">
                 Your Orders
-                {newOrderCount > 0 && (
-                  <span className="absolute top-0 right-0 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                    {newOrderCount}
-                  </span>
-                )}
+                {newOrderCount > 0 && <span className="notification-dot" />}
               </Link>
               {userType === 'Producer' && (
                 <>
@@ -108,11 +115,7 @@ function Navbar() {
               )}
               <Link to="/notifications" className="relative hover:text-yellow-300 transition duration-300">
                 <FaBell className="text-xl" />
-                {newNotificationCount > 0 && (
-                  <span className="absolute top-0 right-0 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                    {newNotificationCount}
-                  </span>
-                )}
+                {hasNewNotifications && <span className="notification-dot" />}
               </Link>
               <div className="relative">
                 <FaUserCircle
@@ -169,16 +172,13 @@ function Navbar() {
             <>
               <Link to="/home" onClick={() => setIsMenuOpen(false)} className="block hover:text-yellow-300">Home</Link>
               <Link to="/products" onClick={() => setIsMenuOpen(false)} className="block hover:text-yellow-300">Products</Link>
-              <Link to="/cart" onClick={() => setIsMenuOpen(false)} className="block hover:text-yellow-300">
+              <Link to="/cart" onClick={() => setIsMenuOpen(false)} className="relative block hover:text-yellow-300">
                 <FaShoppingCart className="text-xl inline mr-1" /> Cart
+                {cartItems.length > 0 && !cartVisited && <span className="notification-dot" />}
               </Link>
               <Link to="/your-orders" onClick={() => setIsMenuOpen(false)} className="relative block hover:text-yellow-300">
                 Your Orders
-                {newOrderCount > 0 && (
-                  <span className="absolute top-0 right-0 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                    {newOrderCount}
-                  </span>
-                )}
+                {newOrderCount > 0 && <span className="notification-dot" />}
               </Link>
               {userType === 'Producer' && (
                 <>
@@ -188,11 +188,7 @@ function Navbar() {
               )}
               <Link to="/notifications" onClick={() => setIsMenuOpen(false)} className="relative block hover:text-yellow-300">
                 Notifications
-                {newNotificationCount > 0 && (
-                  <span className="absolute top-0 right-0 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                    {newNotificationCount}
-                  </span>
-                )}
+                {hasNewNotifications && <span className="notification-dot" />}
               </Link>
               <button
                 onClick={() => { handleLogout(); setIsMenuOpen(false); }}

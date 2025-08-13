@@ -115,7 +115,7 @@ const Product = mongoose.model('Product', productSchema);
 
 // Order Schema with custom orderId
 const orderSchema = new mongoose.Schema({
-  orderId: { type: String, required: true, unique: true }, // Custom order ID
+  orderId: { type: String, required: true, unique: true },
   buyerUsername: { type: String, required: true },
   sellerName: { type: String, required: true },
   productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
@@ -175,7 +175,7 @@ const transporter = nodemailer.createTransport({
     pass: process.env.EMAIL_PASS,
   },
   tls: {
-    rejectUnauthorized: false, // Temporary workaround for self-signed certificates
+    rejectUnauthorized: false,
   },
 });
 
@@ -627,22 +627,31 @@ app.post('/api/submit-product', authenticateToken, upload, async (req, res) => {
       return res.status(400).json({ message: 'All required fields must be provided' });
     }
 
+    // Validate and parse numeric fields
+    const parsedPrice = parseFloat(price);
+    const parsedQuantity = parseInt(quantity);
+    const parsedDeliveryTime = parseInt(deliveryTime);
+    if (isNaN(parsedPrice) || isNaN(parsedQuantity) || isNaN(parsedDeliveryTime)) {
+      return res.status(400).json({ message: 'Invalid numeric values for price, quantity, or delivery time' });
+    }
+
     const newProduct = new Product({
       sellerName: req.user.sellerName,
       itemName,
-      price: parseFloat(price),
+      price: parsedPrice,
       location,
       image,
       video,
       unit,
-      quantity: parseInt(quantity),
+      quantity: parsedQuantity,
       harvestCondition,
-      deliveryTime: parseInt(deliveryTime),
+      deliveryTime: parsedDeliveryTime,
       expiryDate: new Date(expiryDate),
       offers,
     });
 
     const savedProduct = await newProduct.save();
+    console.log('Product saved successfully:', savedProduct); // Debug log
 
     await User.findOneAndUpdate(
       { username: req.user.sellerName },
@@ -652,7 +661,7 @@ app.post('/api/submit-product', authenticateToken, upload, async (req, res) => {
 
     res.status(201).json({ message: 'Product submitted successfully', product: savedProduct });
   } catch (err) {
-    console.error('Submit product error:', err.message);
+    console.error('Submit product error:', err.message, { stack: err.stack, body: req.body });
     res.status(500).json({ message: 'Error submitting product', error: err.message });
   }
 });
@@ -661,10 +670,30 @@ app.post('/api/submit-product', authenticateToken, upload, async (req, res) => {
 app.get('/api/products', authenticateToken, async (req, res) => {
   try {
     const products = await Product.find({ sellerName: req.user.sellerName }).lean();
+    console.log('Fetched products for user:', req.user.sellerName, products); // Debug log
     res.json(products);
   } catch (err) {
     console.error('Fetch products error:', err.message);
     res.status(500).json({ message: 'Error fetching products', error: err.message });
+  }
+});
+
+// Fetch Specific Product
+app.get('/api/products/:id', async (req, res) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: 'Invalid product ID format' });
+    }
+
+    const product = await Product.findById(req.params.id).lean();
+    if (!product) {
+      return res.status(404).json({ message: 'Product not found' });
+    }
+    console.log('Fetched specific product:', product); // Debug log
+    res.json(product);
+  } catch (err) {
+    console.error('Fetch product error:', err.message);
+    res.status(500).json({ message: 'Error fetching product', error: err.message });
   }
 });
 
@@ -676,6 +705,10 @@ app.post('/api/add-to-cart/:productId', authenticateToken, async (req, res) => {
 
     if (!quantity || quantity <= 0) {
       return res.status(400).json({ message: 'Valid quantity is required' });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(productId)) {
+      return res.status(400).json({ message: 'Invalid product ID format' });
     }
 
     const product = await Product.findById(productId);
@@ -700,7 +733,6 @@ app.post('/api/add-to-cart/:productId', authenticateToken, async (req, res) => {
       await newCartItem.save();
     }
 
-    // No quantity reduction, silent update
     res.status(200).json({}); // Empty response to indicate success
   } catch (err) {
     console.error('Add to cart error:', err.message);
@@ -722,8 +754,11 @@ app.post('/api/place-order', authenticateToken, async (req, res) => {
     const orderId = `ORD_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
     const orders = [];
 
-    // Create orders and notifications without reducing quantity
     for (const item of cart) {
+      if (!mongoose.Types.ObjectId.isValid(item._id)) {
+        return res.status(400).json({ message: `Invalid product ID format for item ${item._id}` });
+      }
+
       const product = await Product.findById(item._id);
       if (!product) {
         console.error(`Product not found for ID: ${item._id}`);
@@ -791,8 +826,8 @@ app.post('/api/place-order', authenticateToken, async (req, res) => {
 // Confirm Order (Initiate order request)
 app.post('/api/confirm-order/:orderId', authenticateToken, async (req, res) => {
   try {
-    const { orderId } = req.params; // Use custom orderId from the URL
-    const order = await Order.findOne({ orderId }); // Find by custom orderId
+    const { orderId } = req.params;
+    const order = await Order.findOne({ orderId });
 
     if (!order || order.buyerUsername !== req.user.sellerName) {
       return res.status(404).json({ message: 'Order not found or unauthorized' });
@@ -802,7 +837,6 @@ app.post('/api/confirm-order/:orderId', authenticateToken, async (req, res) => {
       return res.status(400).json({ message: 'Order is not in a pending state' });
     }
 
-    // Ensure notification exists
     let notification = await Notification.findOne({ orderId: order._id });
     if (!notification) {
       notification = new Notification({
@@ -814,7 +848,6 @@ app.post('/api/confirm-order/:orderId', authenticateToken, async (req, res) => {
       await notification.save();
     }
 
-    // Attempt to send email notification, but don't fail the request if it fails
     const seller = await User.findOne({ username: order.sellerName });
     if (seller && seller.email && seller.notifications) {
       try {
@@ -832,11 +865,10 @@ app.post('/api/confirm-order/:orderId', authenticateToken, async (req, res) => {
     res.json({
       message: 'Order request sent to producer successfully',
       orderId: order._id,
-      redirect: '/your-orders', // Indicate to frontend to navigate to Your Orders
+      redirect: '/your-orders',
     });
   } catch (err) {
     console.error('Confirm order error:', err.message, { orderId: req.params.orderId, user: req.user.sellerName });
-    // Return success even if an error occurs, ensuring navigation
     res.json({
       message: 'Order request sent to producer successfully (with errors)',
       orderId: req.params.orderId,
@@ -850,7 +882,7 @@ app.post('/api/verify-payment', authenticateToken, async (req, res) => {
   const { orderId, paymentId } = req.body;
 
   try {
-    const order = await Order.findOne({ orderId }); // Using custom orderId
+    const order = await Order.findOne({ orderId });
     if (!order) return res.status(404).json({ message: 'Order not found' });
 
     const payment = await razorpayInstance.payments.fetch(paymentId);
@@ -890,24 +922,19 @@ app.get('/api/notifications', authenticateToken, async (req, res) => {
 app.post('/api/notification-action/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
   const { action } = req.body;
-
   try {
     const notification = await Notification.findById(id);
     if (!notification || notification.sellerName !== req.user.sellerName) {
       return res.status(404).json({ message: 'Notification not found or unauthorized' });
     }
-
     if (!['accepted', 'declined'].includes(action)) {
       return res.status(400).json({ message: 'Invalid action' });
     }
-
     notification.status = action;
     await notification.save();
-
     const order = await Order.findById(notification.orderId);
     order.status = action === 'accepted' ? 'confirmed' : 'declined';
     await order.save();
-
     if (action === 'accepted') {
       const product = await Product.findById(order.productId);
       if (product) {
@@ -915,7 +942,6 @@ app.post('/api/notification-action/:id', authenticateToken, async (req, res) => 
         await product.save();
       }
     }
-
     const buyer = await User.findOne({ username: notification.buyerUsername });
     if (buyer && buyer.email && buyer.notifications) {
       await transporter.sendMail({
@@ -925,7 +951,6 @@ app.post('/api/notification-action/:id', authenticateToken, async (req, res) => 
         text: `Your order #${order._id} has been ${action} on ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}. ${action === 'accepted' ? 'Go to Your Orders page.' : 'Try another product.'}`,
       });
     }
-
     res.json({ message: `Notification ${action} successfully` });
   } catch (err) {
     console.error('Notification action error:', err.message);
@@ -940,7 +965,6 @@ app.delete('/api/notification-action/:id', authenticateToken, async (req, res) =
     if (!notification || notification.sellerName !== req.user.sellerName) {
       return res.status(404).json({ message: 'Notification not found or unauthorized' });
     }
-
     await notification.deleteOne();
     res.json({ message: 'Notification deleted successfully' });
   } catch (err) {
@@ -974,7 +998,7 @@ app.get('/api/your-orders', authenticateToken, async (req, res) => {
 
       return {
         _id: order._id,
-        orderId: order.orderId, // Include custom orderId
+        orderId: order.orderId,
         buyerUsername: order.buyerUsername,
         sellerName: order.sellerName,
         productId: order.productId?._id,
@@ -1012,7 +1036,6 @@ app.post('/api/order-action/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ message: 'Order not found' });
     }
 
-    // Check authorization
     if (req.user.userType === 'Producer' && order.sellerName !== req.user.sellerName) {
       return res.status(403).json({ message: 'Unauthorized to perform action on this order' });
     }
@@ -1062,6 +1085,9 @@ app.post('/api/order-action/:id', authenticateToken, async (req, res) => {
 app.get('/api/chat-messages/:orderId', authenticateToken, async (req, res) => {
   try {
     const orderId = req.params.orderId;
+    if (!mongoose.Types.ObjectId.isValid(orderId)) {
+      return res.status(400).json({ message: 'Invalid order ID format' });
+    }
     const messages = await Message.find({ orderId }).lean();
     if (!messages || messages.length === 0) {
       return res.json([]); // Return empty array if no messages
@@ -1080,6 +1106,10 @@ app.post('/api/send-message', authenticateToken, async (req, res) => {
 
     if (!orderId || !sender || !receiver || !message) {
       return res.status(400).json({ message: 'Missing required fields' });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(orderId)) {
+      return res.status(400).json({ message: 'Invalid order ID format' });
     }
 
     const order = await Order.findById(orderId);
@@ -1127,6 +1157,65 @@ app.post('/api/send-message', authenticateToken, async (req, res) => {
   } catch (err) {
     console.error('Send message error:', err.message, { body: req.body, stack: err.stack });
     res.status(500).json({ message: 'Error sending message', error: err.message });
+  }
+});
+
+// New Endpoint: Fetch Recently Added Products
+app.get('/api/products/new', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 10;
+    console.log(`Fetching new products with limit: ${limit}`);
+    const products = await Product.find()
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .lean();
+    console.log('Found products:', products);
+
+    if (!products || products.length === 0) {
+      return res.status(404).json({ message: 'No new products found' });
+    }
+
+    const formattedProducts = products.map(product => ({
+      _id: product._id,
+      name: product.itemName, // Map itemName to name
+      image: product.image || '', // Ensure image is provided
+      price: product.price || 0, // Default price if missing
+      listDate: product.createdAt,
+    }));
+
+    res.json(formattedProducts);
+  } catch (err) {
+    console.error('Fetch new products error:', err.message, { stack: err.stack });
+    res.status(500).json({ message: 'Error fetching new products', error: err.message });
+  }
+});
+
+// Premium Products Endpoint
+app.get('/api/products/premium', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 4;
+    console.log(`Fetching premium products with limit: ${limit}`);
+    const products = await Product.find()
+      .sort({ price: -1 })
+      .limit(limit)
+      .lean();
+    console.log('Found premium products:', products);
+
+    if (!products || products.length === 0) {
+      return res.status(404).json({ message: 'No premium products found' });
+    }
+
+    const formattedProducts = products.map(product => ({
+      _id: product._id,
+      name: product.itemName, // Map itemName to name
+      image: product.image || '', // Ensure image is provided
+      price: product.price || 0, // Default price if missing
+    }));
+
+    res.json(formattedProducts);
+  } catch (err) {
+    console.error('Fetch premium products error:', err.message, { stack: err.stack });
+    res.status(500).json({ message: 'Error fetching premium products', error: err.message });
   }
 });
 
