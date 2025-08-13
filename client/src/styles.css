@@ -1,0 +1,97 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Global Styles */
+body {
+  font-family: 'Inter', sans-serif;
+  background: linear-gradient(135deg, #e6f3e6 0%, #f9fafb 100%);
+  color: #1a202c;
+  margin: 0;
+  line-height: 1.6;
+}
+
+/* Custom Container */
+.container {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
+
+/* Navbar Styles */
+.navbar {
+  background: linear-gradient(90deg, #11451e 0%, #48bb78 100%);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  padding: 1rem 0;
+}
+
+/* Hero Section Styles */
+.hero {
+  background: linear-gradient(135deg, #e6f3e6 0%, #ffffff 100%);
+  border-radius: 15px;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+  padding: 3rem 2rem;
+  text-align: center;
+}
+.hero img {
+  max-width: 100%;
+  height: auto;
+  object-fit: cover;
+}
+
+/* Product Card Styles */
+.product-card {
+  background: #ffffff;
+  border-radius: 12px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  border: 1px solid #e2e8f0;
+}
+.product-card:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.1);
+}
+.product-card img {
+  height: 220px;
+  width: 100%;
+  object-fit: cover;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+/* Button Styles */
+.btn {
+  @apply bg-blue-500 text-white px-6 py-3 rounded-lg font-semibold shadow-md transition duration-300;
+  text-decoration: none;
+}
+.btn:hover {
+  @apply bg-blue-600 shadow-lg text-white underline;
+}
+
+/* Footer Styles */
+.footer {
+  background: linear-gradient(90deg, #22543d 0%, #1a4731 100%);
+  color: #ffffff;
+  padding: 2.5rem 0;
+  text-align: center;
+}
+
+/* Responsive Adjustments */
+@media (max-width: 640px) {
+  .product-card {
+    margin-bottom: 1.5rem;
+  }
+  .navbar .container {
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+  .hero {
+    padding: 2rem 1rem;
+  }
+  .flex {
+    flex-direction: column;
+  }
+  .hero img {
+    width: 100%;
+    margin-bottom: 1rem; /* Replaced space-y-4 with margin-bottom */
+  }
+}
