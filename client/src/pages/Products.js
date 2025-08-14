@@ -35,27 +35,32 @@ function Products() {
   // Fetch products with authentication and token refresh
   useEffect(() => {
     const fetchProducts = async () => {
+      setLoading(true);
       try {
         let res = await fetch(`http://localhost:5000/api/products?search=${encodeURIComponent(searchTerm)}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
+        console.log('DEBUG: Initial fetch response status:', res.status); // Debug log
         if (!res.ok && res.status === 401 && refreshToken) {
+          console.log('DEBUG: Token refresh triggered');
           const newToken = await refreshToken();
           if (newToken) {
             res = await fetch(`http://localhost:5000/api/products?search=${encodeURIComponent(searchTerm)}`, {
               headers: { Authorization: `Bearer ${newToken}` },
             });
+            console.log('DEBUG: Refreshed token fetch response status:', res.status);
           } else {
             throw new Error('Authentication failed. Please log in again.');
           }
         }
         if (!res.ok) throw new Error(`HTTP error! Status: ${res.status}`);
         const data = await res.json();
+        console.log('DEBUG: Products data received:', data);
         const validProducts = data.filter(p => p.itemName && p.image && p.quantity > 0);
         setProducts(validProducts);
         setFilteredProducts(validProducts); // Initial filter set to all fetched products
       } catch (error) {
-        console.error('Error fetching products:', error);
+        console.error('DEBUG: Error fetching products:', error);
         setErrorMessage('Failed to load products. Please try again later.');
       } finally {
         setLoading(false);
@@ -136,7 +141,7 @@ function Products() {
     }
 
     if (!addToCart) {
-      console.error('addToCart function is not available in CartContext');
+      console.error('DEBUG: addToCart function is not available in CartContext');
       setErrorMessage('Internal error. Please refresh the page or log in again.');
       return;
     }
@@ -176,7 +181,7 @@ function Products() {
       setTimeout(() => setSuccessMessage(''), 3000);
       setErrorMessage(''); // Clear any previous error
     } catch (error) {
-      console.error('Error adding to cart:', error);
+      console.error('DEBUG: Error adding to cart:', error);
       setErrorMessage(error.message || 'Error updating cart. Please try again.');
     }
   };
@@ -467,18 +472,18 @@ function Products() {
   );
 }
 
-// Inject animation styles (unchanged)
+// Inject animation styles
 const styles = `
-@keyframes pulseTitle { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
-.animate-pulseTitle { animation: pulseTitle 2.5s ease-in-out infinite; }
-@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-.animate-fadeIn { animation: fadeIn 0.3s ease-out; }
-@keyframes bounceIn {
-  0% { transform: scale(0.7); opacity: 0; }
-  50% { transform: scale(1.05); }
-  100% { transform: scale(1); opacity: 1; }
-}
-.animate-bounceIn { animation: bounceIn 0.5s ease-out; }
+  @keyframes pulseTitle { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+  .animate-pulseTitle { animation: pulseTitle 2.5s ease-in-out infinite; }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  .animate-fadeIn { animation: fadeIn 0.3s ease-out; }
+  @keyframes bounceIn {
+    0% { transform: scale(0.7); opacity: 0; }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  .animate-bounceIn { animation: bounceIn 0.5s ease-out; }
 `;
 const styleSheet = document.createElement('style');
 styleSheet.textContent = styles;

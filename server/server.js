@@ -21,7 +21,10 @@ const razorpayInstance = new razorpay({
 });
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: 'http://localhost:3000', // Match your frontend URL
+  credentials: true,
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use('/Uploads', express.static(path.join(__dirname, 'Uploads')));
@@ -221,7 +224,10 @@ const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
-  if (!token) return res.status(401).json({ message: 'No token provided' });
+  if (!token) {
+    console.log('No token provided'); // Debug log
+    return res.status(401).json({ message: 'No token provided' });
+  }
 
   jwt.verify(token, SECRET_KEY, (err, decoded) => {
     if (err) {
@@ -376,27 +382,39 @@ app.post('/api/verify-otp', async (req, res) => {
   const { email, otp, userType } = req.body;
   try {
     const user = await User.findOne({ email });
-    if (!user || user.otp !== otp || user.otpExpires < Date.now()) {
-      return res.status(400).json({ message: 'Invalid or expired OTP' });
-    }
+    if (!user) return res.status(404).json({ message: 'User not found' });
 
     if (user.userType !== userType) {
       return res.status(403).json({ message: `User type mismatch. Expected ${user.userType}` });
+    }
+
+    if (!user.otp || user.otp !== otp || user.otpExpires < Date.now()) {
+      return res.status(400).json({ message: 'Invalid or expired OTP' });
     }
 
     user.otp = undefined;
     user.otpExpires = undefined;
     await user.save();
 
-    const token = jwt.sign(
+    const accessToken = jwt.sign(
       { sellerName: user.username, userType: user.userType },
       SECRET_KEY,
       { expiresIn: '8h' }
     );
+    const refreshToken = jwt.sign(
+      { sellerName: user.username, userType: user.userType },
+      SECRET_KEY,
+      { expiresIn: '7d' }
+    );
+
+    user.refreshToken = refreshToken;
+    await user.save();
 
     res.json({
-      message: 'OTP login successful',
-      token,
+      verified: true,
+      message: 'OTP verified successfully',
+      token: accessToken,
+      refreshToken,
       userType: user.userType,
       username: user.username,
     });
@@ -410,13 +428,23 @@ app.post('/api/verify-otp', async (req, res) => {
 app.post('/api/send-action-otp', authenticateToken, async (req, res) => {
   try {
     const sellerName = req.user.sellerName;
+    console.log('Sending OTP for user:', sellerName); // Debug log
     const user = await User.findOne({ username: sellerName });
-    if (!user) return res.status(404).json({ message: 'User not found' });
+    if (!user) {
+      console.log('User not found:', sellerName); // Debug log
+      return res.status(404).json({ message: 'User not found' });
+    }
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     user.otp = otp;
-    user.otpExpires = Date.now() + 5 * 60 * 1000;
+    user.otpExpires = Date.now() + 5 * 60 * 1000; // 5 minutes
     await user.save();
+    console.log('OTP saved:', { otp, expires: user.otpExpires, email: user.email }); // Updated debug log
+
+    if (!transporterReady) {
+      console.warn('Transporter not ready, cannot send OTP email');
+      return res.status(500).json({ message: 'Email service not ready' });
+    }
 
     await transporter.sendMail({
       from: `"Nutri Store" <${process.env.EMAIL_USER}>`,
@@ -424,11 +452,59 @@ app.post('/api/send-action-otp', authenticateToken, async (req, res) => {
       subject: 'Nutri Store Action Verification OTP',
       text: `Your OTP for action verification is ${otp}. It expires in 5 minutes.`,
     });
+    console.log('OTP email sent to:', user.email); // Debug log
 
     res.json({ message: 'OTP sent successfully to your registered email.' });
   } catch (err) {
-    console.error('Send action OTP error:', err.message);
+    console.error('Send action OTP error:', err.message, { stack: err.stack });
     res.status(500).json({ message: 'Failed to send OTP', error: err.message });
+  }
+});
+
+// Verify Action OTP
+app.post('/api/verify-action-otp', authenticateToken, async (req, res) => {
+  try {
+    const { otp } = req.body;
+    const sellerName = req.user.sellerName;
+    console.log('Received verify-action-otp request:', { otp, sellerName }); // Debug log
+
+    if (!otp) {
+      console.log('OTP missing in request');
+      return res.status(400).json({ message: 'OTP is required' });
+    }
+
+    const user = await User.findOne({ username: sellerName });
+    if (!user) {
+      console.log('User not found:', sellerName);
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    console.log('Validating OTP:', {
+      inputOtp: otp,
+      storedOtp: user.otp,
+      expires: user.otpExpires,
+      now: Date.now(),
+    }); // Debug log
+
+    if (!user.otp || user.otp !== otp || user.otpExpires < Date.now()) {
+      console.log('OTP validation failed:', {
+        hasOtp: !!user.otp,
+        otpMatch: user.otp === otp,
+        isExpired: user.otpExpires < Date.now(),
+      });
+      return res.status(400).json({ message: 'Invalid or expired OTP' });
+    }
+
+    // Clear OTP after successful verification
+    user.otp = undefined;
+    user.otpExpires = undefined;
+    await user.save();
+    console.log('OTP verified and cleared for user:', sellerName);
+
+    res.json({ verified: true, message: 'OTP verified successfully' });
+  } catch (err) {
+    console.error('Verify action OTP error:', err.message, { stack: err.stack });
+    res.status(500).json({ message: 'OTP verification failed', error: err.message });
   }
 });
 
@@ -627,7 +703,6 @@ app.post('/api/submit-product', authenticateToken, upload, async (req, res) => {
       return res.status(400).json({ message: 'All required fields must be provided' });
     }
 
-    // Validate and parse numeric fields
     const parsedPrice = parseFloat(price);
     const parsedQuantity = parseInt(quantity);
     const parsedDeliveryTime = parseInt(deliveryTime);
@@ -651,7 +726,7 @@ app.post('/api/submit-product', authenticateToken, upload, async (req, res) => {
     });
 
     const savedProduct = await newProduct.save();
-    console.log('Product saved successfully:', savedProduct); // Debug log
+    console.log('Product saved successfully:', savedProduct);
 
     await User.findOneAndUpdate(
       { username: req.user.sellerName },
@@ -666,20 +741,147 @@ app.post('/api/submit-product', authenticateToken, upload, async (req, res) => {
   }
 });
 
-// Fetch Products
-app.get('/api/products', authenticateToken, async (req, res) => {
+// Fetch Your Products
+app.get('/api/products/your', authenticateToken, async (req, res) => {
   try {
+    if (req.user.userType !== 'Producer') {
+      return res.status(403).json({ message: 'Only Producers can fetch their products' });
+    }
+
     const products = await Product.find({ sellerName: req.user.sellerName }).lean();
-    console.log('Fetched products for user:', req.user.sellerName, products); // Debug log
+    if (!products || products.length === 0) {
+      return res.status(404).json({ message: 'No products found' });
+    }
+
     res.json(products);
   } catch (err) {
-    console.error('Fetch products error:', err.message);
+    console.error('Fetch your products error:', err.message);
+    res.status(500).json({ message: 'Error fetching your products', error: err.message });
+  }
+});
+
+// Delete Product
+app.delete('/api/products/:id', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.userType !== 'Producer') {
+      return res.status(403).json({ message: 'Only Producers can delete products' });
+    }
+
+    const product = await Product.findById(req.params.id);
+    if (!product) return res.status(404).json({ message: 'Product not found' });
+
+    if (product.sellerName !== req.user.sellerName) {
+      return res.status(403).json({ message: 'Unauthorized to delete this product' });
+    }
+
+    await product.deleteOne();
+    await User.findOneAndUpdate(
+      { username: req.user.sellerName },
+      { $inc: { listedItems: -1 } },
+      { new: true }
+    );
+
+    res.json({ message: 'Product deleted successfully' });
+  } catch (err) {
+    console.error('Delete product error:', err.message);
+    res.status(500).json({ message: 'Error deleting product', error: err.message });
+  }
+});
+
+// Update Product
+app.put('/api/products/:id', authenticateToken, upload, async (req, res) => {
+  try {
+    if (req.user.userType !== 'Producer') {
+      return res.status(403).json({ message: 'Only Producers can update products' });
+    }
+
+    const product = await Product.findById(req.params.id);
+    if (!product) return res.status(404).json({ message: 'Product not found' });
+
+    if (product.sellerName !== req.user.sellerName) {
+      return res.status(403).json({ message: 'Unauthorized to update this product' });
+    }
+
+    const { itemName, price, location, unit, quantity, harvestCondition, deliveryTime, expiryDate, offers } = req.body;
+    const image = req.files?.image ? `/Uploads/${req.files.image[0].filename}` : product.image;
+    const video = req.files?.video ? `/Uploads/${req.files.video[0].filename}` : product.video;
+
+    const updateData = {
+      itemName: itemName || product.itemName,
+      price: price ? parseFloat(price) : product.price,
+      location: location || product.location,
+      unit: unit || product.unit,
+      quantity: quantity ? parseInt(quantity) : product.quantity,
+      harvestCondition: harvestCondition || product.harvestCondition,
+      deliveryTime: deliveryTime ? parseInt(deliveryTime) : product.deliveryTime,
+      expiryDate: expiryDate ? new Date(expiryDate) : product.expiryDate,
+      offers: offers !== undefined ? offers : product.offers,
+      image,
+      video,
+    };
+
+    Object.keys(updateData).forEach(key => updateData[key] === undefined && delete updateData[key]);
+
+    const updatedProduct = await Product.findByIdAndUpdate(
+      req.params.id,
+      { $set: updateData },
+      { new: true, runValidators: true }
+    );
+
+    res.json(updatedProduct);
+  } catch (err) {
+    console.error('Update product error:', err.message);
+    res.status(500).json({ message: 'Error updating product', error: err.message });
+  }
+});
+
+app.get('/api/products', async (req, res) => {
+  try {
+    const { sort, limit, search } = req.query;
+    console.log('DEBUG: Query params received:', { sort, limit, search });
+
+    // Construct the MongoDB query
+    const query = Product.find().lean(); // Fetch all products
+
+    // Apply search if provided (case-insensitive)
+    if (search) {
+      query.where('itemName').regex(new RegExp(search, 'i'));
+    }
+
+    // Apply sorting
+    if (sort) {
+      const sortOptions = sort.split(',').reduce((acc, s) => {
+        const [field, order] = s.split(':');
+        acc[field] = order === 'desc' ? -1 : 1;
+        return acc;
+      }, {});
+      query.sort(sortOptions);
+    } else {
+      query.sort({ createdAt: -1 });
+    }
+
+    // Apply limit if provided
+    if (limit) {
+      query.limit(parseInt(limit) || 10);
+    }
+
+    console.log('DEBUG: MongoDB query constructed:', query.getQuery());
+    const products = await query;
+    console.log('DEBUG: Fetched products for /api/products:', products);
+
+    if (!products || products.length === 0) {
+      return res.status(404).json({ message: 'No products found' });
+    }
+
+    res.json(products);
+  } catch (err) {
+    console.error('DEBUG: Fetch products error:', err.message);
     res.status(500).json({ message: 'Error fetching products', error: err.message });
   }
 });
 
-// Fetch Specific Product
-app.get('/api/products/:id', async (req, res) => {
+// Fetch Specific Product (with authentication)
+app.get('/api/products/:id', authenticateToken, async (req, res) => {
   try {
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
       return res.status(400).json({ message: 'Invalid product ID format' });
@@ -689,7 +891,12 @@ app.get('/api/products/:id', async (req, res) => {
     if (!product) {
       return res.status(404).json({ message: 'Product not found' });
     }
-    console.log('Fetched specific product:', product); // Debug log
+
+    if (req.user.userType === 'Producer' && product.sellerName !== req.user.sellerName) {
+      return res.status(403).json({ message: 'Unauthorized to view this product' });
+    }
+
+    console.log('Fetched specific product:', product);
     res.json(product);
   } catch (err) {
     console.error('Fetch product error:', err.message);
@@ -733,7 +940,7 @@ app.post('/api/add-to-cart/:productId', authenticateToken, async (req, res) => {
       await newCartItem.save();
     }
 
-    res.status(200).json({}); // Empty response to indicate success
+    res.status(200).json({});
   } catch (err) {
     console.error('Add to cart error:', err.message);
     res.status(500).json({ message: 'Error adding to cart', error: err.message });
@@ -1175,23 +1382,58 @@ app.get('/api/products/new', async (req, res) => {
       return res.status(404).json({ message: 'No new products found' });
     }
 
-    const formattedProducts = products.map(product => ({
-      _id: product._id,
-      name: product.itemName, // Map itemName to name
-      image: product.image || '', // Ensure image is provided
-      price: product.price || 0, // Default price if missing
-      listDate: product.createdAt,
-    }));
-
-    res.json(formattedProducts);
+    res.json(products); // Return full product objects to match /api/products
   } catch (err) {
     console.error('Fetch new products error:', err.message, { stack: err.stack });
     res.status(500).json({ message: 'Error fetching new products', error: err.message });
   }
 });
 
+app.get('/api/products/most-sold', authenticateToken, async (req, res) => {
+  try {
+    const orderCount = await Order.countDocuments();
+    if (orderCount === 0) {
+      return res.status(404).json({ message: 'No sales data available' });
+    }
+
+    const mostSold = await Order.aggregate([
+      { $match: { quantity: { $exists: true, $gt: 0 } } },
+      { $group: { _id: '$productId', totalSold: { $sum: '$quantity' } } },
+      { $sort: { totalSold: -1 } },
+      { $limit: 5 },
+      {
+        $lookup: {
+          from: 'products',
+          localField: '_id',
+          foreignField: '_id',
+          as: 'product',
+        },
+      },
+      { $unwind: '$product' },
+      {
+        $project: {
+          _id: '$product._id',
+          itemName: '$product.itemName',
+          image: '$product.image',
+          price: '$product.price',
+          quantity: '$product.quantity',
+        },
+      },
+    ]).exec();
+
+    if (!mostSold || mostSold.length === 0) {
+      return res.status(404).json({ message: 'No most sold items found' });
+    }
+
+    res.json(mostSold);
+  } catch (err) {
+    console.error('Fetch most sold error:', err.message, { stack: err.stack });
+    res.status(500).json({ message: 'Error fetching most sold items', error: err.message });
+  }
+});
+
 // Premium Products Endpoint
-app.get('/api/products/premium', async (req, res) => {
+app.get('/api/products/premium', authenticateToken, async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 4;
     console.log(`Fetching premium products with limit: ${limit}`);
@@ -1207,9 +1449,9 @@ app.get('/api/products/premium', async (req, res) => {
 
     const formattedProducts = products.map(product => ({
       _id: product._id,
-      name: product.itemName, // Map itemName to name
-      image: product.image || '', // Ensure image is provided
-      price: product.price || 0, // Default price if missing
+      name: product.itemName,
+      image: product.image || '',
+      price: product.price || 0,
     }));
 
     res.json(formattedProducts);

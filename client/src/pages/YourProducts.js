@@ -53,15 +53,17 @@ function YourProducts() {
         { otp },
         { headers: { Authorization: `Bearer ${token}` } }
       );
+      console.log('Verify OTP response:', res.data); // Debug log
       if (res.data.verified) {
         setIsVerified(true);
         sessionStorage.setItem('actionVerified', 'true');
         fetchProducts();
       } else {
-        setError('Invalid OTP or expired.');
+        setError(res.data.message || 'Invalid OTP or expired.');
       }
     } catch (err) {
-      setError(err.response?.data?.message || 'OTP verification failed.');
+      console.error('Verify OTP error:', err.response?.data, err.message); // Debug log
+      setError(err.response?.data?.message || 'OTP verification failed. Please try again.');
     }
   };
 

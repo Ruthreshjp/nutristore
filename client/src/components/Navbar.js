@@ -26,7 +26,7 @@ function Navbar() {
     const fetchOrderCount = async () => {
       try {
         const token = localStorage.getItem('token');
-        if (!token) return;
+        if (!token || !user) return;
 
         const response = await fetch('http://localhost:5000/api/your-orders', {
           headers: { 'Authorization': `Bearer ${token}` },
@@ -41,27 +41,31 @@ function Navbar() {
       }
     };
 
-    fetchOrderCount();
-    const interval = setInterval(fetchOrderCount, 30000); // Poll every 30 seconds
-    return () => clearInterval(interval);
+    if (user) {
+      fetchOrderCount();
+      const interval = setInterval(fetchOrderCount, 30000); // Poll every 30 seconds
+      return () => clearInterval(interval);
+    }
   }, [user]);
 
   // Clear cart notification when visiting cart page
   useEffect(() => {
-    if (location.pathname === '/cart') {
+    if (location.pathname === '/cart' && user) {
       localStorage.setItem('cartVisited', 'true');
     }
-  }, [location.pathname]);
+  }, [location.pathname, user]);
 
   const handleLogout = () => {
     logout();
     navigate('/');
+    setProfileMenuOpen(false); // Close profile menu on logout
+    setIsMenuOpen(false); // Close mobile menu on logout
   };
 
   const handleSearch = (e) => {
     e.preventDefault();
     const trimmed = searchQuery.trim();
-    if (trimmed === '') return;
+    if (trimmed === '' || !user) return;
     navigate(`/products?search=${encodeURIComponent(trimmed)}`);
     setSearchQuery('');
     setIsMenuOpen(false); // Close mobile menu after search
@@ -71,7 +75,8 @@ function Navbar() {
   const cartVisited = localStorage.getItem('cartVisited') === 'true';
 
   return (
-    <nav className="relative bg-gradient-to-r from-indigo-600/80 to-cyan-400/80 backdrop-blur-md text-white py-4 shadow-lg border-b border-cyan-500/30">
+    <nav className="relative bg-gradient-to-r from-indigo-600/80 to-cyan-400/80 backdrop-blur-md text-white py-4 shadow-lg border-b border-cyan-500/30 z-50">
+      {/* Increased z-index to 50 to ensure it stays above other content */}
       <div className="container mx-auto flex justify-between items-center px-4">
         <Link to={user ? '/home' : '/'} className="text-2xl font-extrabold animate-pulseLogo flex items-center">
           <span className="bg-gradient-to-r from-lime-400 to-teal-300 bg-clip-text text-transparent drop-shadow-md">Nutri</span>
@@ -93,7 +98,12 @@ function Navbar() {
           </>
         )}
         <div className="hidden md:flex space-x-6 items-center">
-          {user ? (
+          {!user ? (
+            <>
+              <Link to="/login" className="hover:text-green-200 font-bold transition duration-300">Login</Link>
+              <Link to="/signup" className="hover:text-green-200 font-bold transition duration-300">Sign Up</Link>
+            </>
+          ) : (
             <>
               <Link to="/home" className="hover:text-yellow-300 transition duration-300">
                 <FaHome className="text-xl" />
@@ -123,9 +133,10 @@ function Navbar() {
                   onClick={() => setProfileMenuOpen(!profileMenuOpen)}
                 />
                 {profileMenuOpen && (
-                  <div className="absolute right-0 mt-2 w-40 bg-white text-black rounded-lg shadow-lg z-10">
-                    <Link to="/profile" className="block px-4 py-2 hover:bg-gray-200">Profile</Link>
-                    <Link to="/settings" className="block px-4 py-2 hover:bg-gray-200">Settings</Link>
+                  <div className="absolute right-0 mt-2 w-40 bg-white text-black rounded-lg shadow-lg z-50">
+                    {/* Increased z-index to 50 for profile menu */}
+                    <Link to="/profile" className="block px-4 py-2 hover:bg-gray-200" onClick={() => setProfileMenuOpen(false)}>Profile</Link>
+                    <Link to="/settings" className="block px-4 py-2 hover:bg-gray-200" onClick={() => setProfileMenuOpen(false)}>Settings</Link>
                     <button
                       onClick={handleLogout}
                       className="w-full text-left px-4 py-2 hover:bg-red-100 text-red-600"
@@ -135,11 +146,6 @@ function Navbar() {
                   </div>
                 )}
               </div>
-            </>
-          ) : (
-            <>
-              <Link to="/login" className="hover:text-green-200 font-bold transition duration-300">Login</Link>
-              <Link to="/signup" className="hover:text-green-200 font-bold transition duration-300">Sign Up</Link>
             </>
           )}
         </div>
@@ -155,21 +161,25 @@ function Navbar() {
         </div>
       </div>
       {isMenuOpen && (
-        <div className="md:hidden bg-gray-800/90 backdrop-blur-md px-4 py-4 space-y-3 animate-slideDown">
-          {user && (
-            <form onSubmit={handleSearch} className="flex items-center space-x-2 mb-4">
-              <FaSearch className="text-white" />
-              <input
-                type="text"
-                placeholder="Search for products"
-                className="px-4 py-2 rounded-lg bg-white/80 text-black focus:outline-none focus:ring-2 focus:ring-teal-400 w-full"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </form>
-          )}
-          {user ? (
+        <div className="md:hidden bg-gray-800/90 backdrop-blur-md px-4 py-4 space-y-3 animate-slideDown z-50">
+          {/* Increased z-index to 50 for mobile menu */}
+          {!user ? (
             <>
+              <Link to="/login" onClick={() => setIsMenuOpen(false)} className="block hover:text-green-200">Login</Link>
+              <Link to="/signup" onClick={() => setIsMenuOpen(false)} className="block hover:text-green-200">Sign Up</Link>
+            </>
+          ) : (
+            <>
+              <form onSubmit={handleSearch} className="flex items-center space-x-2 mb-4">
+                <FaSearch className="text-white" />
+                <input
+                  type="text"
+                  placeholder="Search for products"
+                  className="px-4 py-2 rounded-lg bg-white/80 text-black focus:outline-none focus:ring-2 focus:ring-teal-400 w-full"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </form>
               <Link to="/home" onClick={() => setIsMenuOpen(false)} className="block hover:text-yellow-300">Home</Link>
               <Link to="/products" onClick={() => setIsMenuOpen(false)} className="block hover:text-yellow-300">Products</Link>
               <Link to="/cart" onClick={() => setIsMenuOpen(false)} className="relative block hover:text-yellow-300">
@@ -196,11 +206,6 @@ function Navbar() {
               >
                 Logout
               </button>
-            </>
-          ) : (
-            <>
-              <Link to="/login" onClick={() => setIsMenuOpen(false)} className="block hover:text-green-200">Login</Link>
-              <Link to="/signup" onClick={() => setIsMenuOpen(false)} className="block hover:text-green-200">Sign Up</Link>
             </>
           )}
         </div>
