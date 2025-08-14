@@ -194,10 +194,10 @@ function Home() {
           </p>
           <div className="mt-8 text-center">
             <Link
-              to="/about"
+              to="/products"
               className="inline-block bg-gradient-to-r from-green-500 to-teal-600 hover:from-green-600 hover:to-teal-700 text-white font-bold px-8 py-3 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300"
             >
-              Learn More
+              Explore
             </Link>
           </div>
         </section>

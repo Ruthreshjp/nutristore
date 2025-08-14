@@ -79,8 +79,9 @@ function Navbar() {
       {/* Increased z-index to 50 to ensure it stays above other content */}
       <div className="container mx-auto flex justify-between items-center px-4">
         <Link to={user ? '/home' : '/'} className="text-2xl font-extrabold animate-pulseLogo flex items-center">
-          <span className="bg-gradient-to-r from-lime-400 to-teal-300 bg-clip-text text-transparent drop-shadow-md">Nutri</span>
-          <span className="bg-gradient-to-r from-fuchsia-400 to-rose-400 bg-clip-text text-transparent drop-shadow-md">-Store</span>
+          <span className="bg-gradient-to-r from-yellow-400 to-green-500 bg-clip-text text-transparent drop-shadow-lg">Nutri</span>
+          <span className="bg-gradient-to-r from-orange-500 to-red-500 bg-clip-text text-transparent drop-shadow-lg"> Store</span>
+
         </Link>
         {user && (
           <>
