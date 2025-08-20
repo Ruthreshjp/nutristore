@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
-import { FaMoneyCheckAlt } from 'react-icons/fa';
+import { FaMoneyCheckAlt, FaArrowLeft, FaSave } from 'react-icons/fa';
 
 function UpdateBankDetails() {
   const { user, userType, loading } = useAuth();
@@ -82,105 +82,163 @@ function UpdateBankDetails() {
 
   if (loading || isFetching) {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <div className="text-white text-xl animate-pulse">Loading...</div>
+      <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-100 flex items-center justify-center">
+        <div className="text-amber-700 text-xl animate-pulse">Loading...</div>
       </div>
     );
   }
 
-  if (error) {
+  if (error && userType !== 'Producer') {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <div className="text-red-400 text-xl">{error}</div>
+      <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-100 flex items-center justify-center">
+        <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4">
+          <div className="text-red-500 text-center text-lg mb-6">{error}</div>
+          <button
+            onClick={() => navigate('/')}
+            className="w-full bg-gradient-to-r from-amber-500 to-orange-500 text-white py-3 rounded-xl font-semibold hover:from-amber-600 hover:to-orange-600 transition-all duration-300"
+          >
+            Go Home
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white">
-      <div className="container mx-auto px-6 py-10">
-        <div className="bg-gradient-to-r from-indigo-600/80 to-cyan-400/80 backdrop-blur-md rounded-xl shadow-2xl border border-cyan-500/30 p-8">
-          <h1 className="text-3xl font-extrabold bg-gradient-to-r from-lime-400 to-teal-300 bg-clip-text text-transparent text-center mb-8">
-            Update Bank Details
-          </h1>
+    <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-100 pt-20 pb-10 px-4">
+      <div className="max-w-2xl mx-auto">
+        <div className="bg-white rounded-3xl shadow-2xl overflow-hidden border border-amber-200">
+          {/* Header */}
+          <div className="bg-gradient-to-r from-amber-500 to-orange-500 p-6 text-center">
+            <div className="flex items-center justify-center mb-4">
+              <div className="bg-amber-100 p-4 rounded-full">
+                <FaMoneyCheckAlt className="text-amber-600 text-3xl" />
+              </div>
+            </div>
+            <h1 className="text-3xl font-bold text-white">Update Bank Details</h1>
+            <p className="text-amber-100 mt-2">Secure payment information for your account</p>
+          </div>
 
-          {error && <p className="text-red-400 text-center mb-4">{error}</p>}
-          {isLoading && <p className="text-cyan-300 text-center mb-4">Updating...</p>}
+          {/* Form */}
+          <div className="p-6 md:p-8">
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-600 p-4 rounded-xl mb-6">
+                {error}
+              </div>
+            )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <label className="block text-cyan-300 mb-2 font-medium">Account Number</label>
-              <input
-                type="text"
-                name="accountNumber"
-                value={formData.accountNumber}
-                onChange={handleInputChange}
-                className="w-full p-3 bg-gray-800 border border-cyan-500/30 rounded-lg text-gray-200"
-                required
-              />
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="md:col-span-2">
+                  <label className="block text-amber-900 font-medium mb-2">Account Holder Name</label>
+                  <input
+                    type="text"
+                    name="accountHolderName"
+                    value={formData.accountHolderName}
+                    onChange={handleInputChange}
+                    className="w-full p-4 bg-amber-50 border border-amber-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-300"
+                    placeholder="Enter account holder name"
+                    required
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-amber-900 font-medium mb-2">Account Number</label>
+                  <input
+                    type="text"
+                    name="accountNumber"
+                    value={formData.accountNumber}
+                    onChange={handleInputChange}
+                    className="w-full p-4 bg-amber-50 border border-amber-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-300"
+                    placeholder="Enter account number"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-amber-900 font-medium mb-2">Bank Name</label>
+                  <input
+                    type="text"
+                    name="bankName"
+                    value={formData.bankName}
+                    onChange={handleInputChange}
+                    className="w-full p-4 bg-amber-50 border border-amber-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-300"
+                    placeholder="Enter bank name"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-amber-900 font-medium mb-2">Branch</label>
+                  <input
+                    type="text"
+                    name="branch"
+                    value={formData.branch}
+                    onChange={handleInputChange}
+                    className="w-full p-4 bg-amber-50 border border-amber-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-300"
+                    placeholder="Enter branch name"
+                    required
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-amber-900 font-medium mb-2">IFSC Code</label>
+                  <input
+                    type="text"
+                    name="ifsc"
+                    value={formData.ifsc}
+                    onChange={handleInputChange}
+                    className="w-full p-4 bg-amber-50 border border-amber-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-300"
+                    placeholder="Enter IFSC code"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-4 pt-4">
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="flex-1 bg-gradient-to-r from-amber-500 to-orange-500 text-white py-4 rounded-xl font-semibold hover:from-amber-600 hover:to-orange-600 transition-all duration-300 flex items-center justify-center gap-2 shadow-lg hover:shadow-xl transform hover:-translate-y-1"
+                >
+                  {isLoading ? (
+                    <>
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                      Updating...
+                    </>
+                  ) : (
+                    <>
+                      <FaSave className="text-lg" />
+                      Save Changes
+                    </>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate('/profile')}
+                  disabled={isLoading}
+                  className="flex-1 bg-amber-100 text-amber-700 py-4 rounded-xl font-semibold hover:bg-amber-200 transition-all duration-300 flex items-center justify-center gap-2 border border-amber-200"
+                >
+                  <FaArrowLeft />
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* Security Note */}
+          <div className="bg-amber-50 p-6 border-t border-amber-200">
+            <div className="flex items-start gap-3">
+              <div className="bg-amber-200 p-2 rounded-full mt-1">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-amber-700" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <p className="text-amber-700 text-sm">
+                Your bank details are encrypted and stored securely. We never share your financial information with third parties.
+              </p>
             </div>
-            <div>
-              <label className="block text-cyan-300 mb-2 font-medium">Bank Name</label>
-              <input
-                type="text"
-                name="bankName"
-                value={formData.bankName}
-                onChange={handleInputChange}
-                className="w-full p-3 bg-gray-800 border border-cyan-500/30 rounded-lg text-gray-200"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-cyan-300 mb-2 font-medium">Branch</label>
-              <input
-                type="text"
-                name="branch"
-                value={formData.branch}
-                onChange={handleInputChange}
-                className="w-full p-3 bg-gray-800 border border-cyan-500/30 rounded-lg text-gray-200"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-cyan-300 mb-2 font-medium">IFSC Code</label>
-              <input
-                type="text"
-                name="ifsc"
-                value={formData.ifsc}
-                onChange={handleInputChange}
-                className="w-full p-3 bg-gray-800 border border-cyan-500/30 rounded-lg text-gray-200"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-cyan-300 mb-2 font-medium">Account Holder Name</label>
-              <input
-                type="text"
-                name="accountHolderName"
-                value={formData.accountHolderName}
-                onChange={handleInputChange}
-                className="w-full p-3 bg-gray-800 border border-cyan-500/30 rounded-lg text-gray-200"
-                required
-              />
-            </div>
-            <div className="flex gap-4">
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="flex-1 bg-gradient-to-r from-blue-600 to-purple-700 text-white py-3 rounded-lg transition duration-300 hover:scale-105"
-              >
-                {isLoading ? 'Updating...' : 'Save Changes'}
-              </button>
-              <button
-                type="button"
-                onClick={() => navigate('/profile')}
-                disabled={isLoading}
-                className="flex-1 bg-gray-700 text-white py-3 rounded-lg transition duration-300 hover:bg-gray-600"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
+          </div>
         </div>
       </div>
     </div>

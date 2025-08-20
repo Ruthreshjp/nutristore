@@ -3,13 +3,14 @@ import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import PhoneInput from 'react-phone-number-input';
 import 'react-phone-number-input/style.css';
+import { FaUser, FaEnvelope, FaLock, FaPhone, FaUserTag } from 'react-icons/fa';
 
 function Signup() {
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [mobileNumber, setMobileNumber] = useState('');
-  const [userType, setUserType] = useState('Producer'); // Default selection
+  const [userType, setUserType] = useState('Producer');
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
@@ -24,11 +25,11 @@ function Signup() {
         email,
         password,
         mobileNumber,
-        userType, // ✅ Send userType to backend
+        userType,
       });
       setMessage(response.data.message);
       if (response.data.message === 'Signup successful! Please login.') {
-        navigate('/login');
+        setTimeout(() => navigate('/login'), 1500);
       }
     } catch (error) {
       const errorMsg = error.response?.data?.message || error.message || 'An unexpected error occurred';
@@ -40,115 +41,165 @@ function Signup() {
   };
 
   return (
-    <div className="relative w-full max-w-md p-6 bg-gray-900/80 backdrop-blur-md rounded-xl shadow-2xl border border-blue-500/30 transform transition-all duration-700 animate-bounceIn">
-      <div className="absolute -top-4 -left-4 w-16 h-16 bg-blue-500/20 rounded-full blur-md animate-pulse"></div>
-      <div className="absolute -bottom-4 -right-4 w-20 h-20 bg-purple-500/20 rounded-full blur-md animate-pulse delay-1000"></div>
+    <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-100 flex items-center justify-center p-4">
+      <div className="relative w-full max-w-md p-6 bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl border border-amber-200 transform transition-all duration-700 animate-fadeIn">
+        {/* Decorative elements */}
+        <div className="absolute -top-3 -left-3 w-12 h-12 bg-amber-400/20 rounded-full blur-sm"></div>
+        <div className="absolute -bottom-3 -right-3 w-16 h-16 bg-orange-400/20 rounded-full blur-sm"></div>
+        <div className="absolute top-2 right-2 w-8 h-8 bg-amber-300/30 rounded-full"></div>
 
-      <h1 className="text-4xl font-extrabold text-blue-400 mb-6 text-center tracking-wide animate-pulseLogo">
-        Sign Up
-      </h1>
+        <h1 className="text-3xl font-bold text-amber-900 mb-6 text-center">
+          Create Your Account
+        </h1>
 
-      <form onSubmit={handleSignup} className="space-y-5">
-        {/* Username */}
-        <div className="relative">
-          <label className="block text-blue-300 mb-2 font-medium">Username</label>
-          <input
-            type="text"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            className="w-full h-14 p-3 bg-gray-800 border border-blue-500/30 rounded-lg text-white"
-            placeholder="Enter username"
-            required
-          />
-        </div>
+        <form onSubmit={handleSignup} className="space-y-4">
+          {/* Username */}
+          <div className="relative">
+            <label className="block text-amber-800 mb-2 font-medium">Username</label>
+            <div className="relative">
+              <FaUser className="absolute left-3 top-1/2 transform -translate-y-1/2 text-amber-600 z-10" />
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="w-full pl-10 pr-4 py-3 bg-amber-50 border border-amber-300 rounded-xl text-amber-900 placeholder-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent transition-all duration-300"
+                placeholder="Enter username"
+                required
+              />
+            </div>
+          </div>
 
-        {/* Email */}
-        <div className="relative">
-          <label className="block text-blue-300 mb-2 font-medium">Email</label>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full h-14 p-3 bg-gray-800 border border-blue-500/30 rounded-lg text-white"
-            placeholder="Enter email"
-            required
-          />
-        </div>
+          {/* Email */}
+          <div className="relative">
+            <label className="block text-amber-800 mb-2 font-medium">Email</label>
+            <div className="relative">
+              <FaEnvelope className="absolute left-3 top-1/2 transform -translate-y-1/2 text-amber-600 z-10" />
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full pl-10 pr-4 py-3 bg-amber-50 border border-amber-300 rounded-xl text-amber-900 placeholder-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent transition-all duration-300"
+                placeholder="Enter email"
+                required
+              />
+            </div>
+          </div>
 
-        {/* Password */}
-        <div className="relative">
-          <label className="block text-blue-300 mb-2 font-medium">Password</label>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full h-14 p-3 bg-gray-800 border border-blue-500/30 rounded-lg text-white"
-            placeholder="Enter password"
-            required
-          />
-        </div>
+          {/* Password */}
+          <div className="relative">
+            <label className="block text-amber-800 mb-2 font-medium">Password</label>
+            <div className="relative">
+              <FaLock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-amber-600 z-10" />
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full pl-10 pr-4 py-3 bg-amber-50 border border-amber-300 rounded-xl text-amber-900 placeholder-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent transition-all duration-300"
+                placeholder="Enter password"
+                required
+              />
+            </div>
+          </div>
 
-        {/* Mobile Number */}
-        <div className="relative">
-          <label className="block text-blue-300 mb-2 font-medium">Mobile Number</label>
-          <PhoneInput
-            international
-            defaultCountry="IN"
-            value={mobileNumber}
-            onChange={setMobileNumber}
-            className="phone-input w-full h-14 border border-blue-500/30 rounded-lg"
-            placeholder="Enter mobile number"
-            required
-          />
-        </div>
+          {/* Mobile Number */}
+          <div className="relative">
+            <label className="block text-amber-800 mb-2 font-medium">Mobile Number</label>
+            <div className="relative">
+              <FaPhone className="absolute left-3 top-1/2 transform -translate-y-1/2 text-amber-600 z-10" />
+              <PhoneInput
+                international
+                defaultCountry="IN"
+                value={mobileNumber}
+                onChange={setMobileNumber}
+                className="phone-input w-full pl-10 border border-amber-300 rounded-xl bg-amber-50"
+                placeholder="Enter mobile number"
+                required
+              />
+            </div>
+          </div>
 
-        {/* ✅ User Type Selection */}
-        <div className="relative">
-          <label className="block text-blue-300 mb-2 font-medium">User Type</label>
-          <select
-            value={userType}
-            onChange={(e) => setUserType(e.target.value)}
-            className="w-full h-14 p-3 bg-gray-800 border border-blue-500/30 rounded-lg text-white"
-            required
+          {/* User Type Selection */}
+          <div className="relative">
+            <label className="block text-amber-800 mb-2 font-medium">User Type</label>
+            <div className="relative">
+              <FaUserTag className="absolute left-3 top-1/2 transform -translate-y-1/2 text-amber-600 z-10" />
+              <select
+                value={userType}
+                onChange={(e) => setUserType(e.target.value)}
+                className="w-full pl-10 pr-4 py-3 bg-amber-50 border border-amber-300 rounded-xl text-amber-900 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent appearance-none transition-all duration-300"
+                required
+              >
+                <option value="Producer">Producer</option>
+                <option value="Consumer">Consumer</option>
+              </select>
+              <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
+                <svg className="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
+                </svg>
+              </div>
+            </div>
+          </div>
+
+          {/* Submit Button */}
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white py-3 rounded-xl font-semibold transition-all duration-300 transform hover:-translate-y-1 hover:shadow-lg disabled:opacity-70 disabled:cursor-not-allowed"
           >
-            <option value="Producer">Producer</option>
-            <option value="Consumer">Consumer</option>
-          </select>
-        </div>
+            {isLoading ? (
+              <div className="flex items-center justify-center">
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                Signing up...
+              </div>
+            ) : (
+              'Sign Up'
+            )}
+          </button>
 
-        {/* Submit Button */}
-        <button
-          type="submit"
-          disabled={isLoading}
-          className="w-full bg-gradient-to-r from-blue-600 to-purple-700 text-white py-3 rounded-lg font-semibold hover:from-blue-700 hover:to-purple-800 transition-all duration-300 transform hover:scale-105"
-        >
-          {isLoading ? 'Signing up...' : 'Sign Up'}
-        </button>
+          {message && (
+            <div className={`p-3 rounded-xl text-center ${
+              message.includes('error') ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
+            }`}>
+              {message}
+            </div>
+          )}
 
-        {message && <p className="text-center text-gray-300 mt-4">{message}</p>}
-        <p className="text-center text-gray-400 mt-4">
-          Already have an account?{' '}
-          <Link to="/login" className="text-purple-400 hover:text-purple-300">Login</Link>
-        </p>
-      </form>
+          <p className="text-center text-amber-700 mt-4">
+            Already have an account?{' '}
+            <Link to="/login" className="text-orange-600 hover:text-orange-700 font-semibold transition-colors duration-300">
+              Login here
+            </Link>
+          </p>
+        </form>
 
-      {/* ✅ Custom style for PhoneInput */}
-      <style>
-        {`
-          .phone-input input {
-            background-color: #1f2937 !important; /* bg-gray-800 */
-            color: white !important;
-            padding: 14px;
-            font-size: 16px;
-            width: 100%;
-            border: none;
-            outline: none;
-          }
-          .phone-input input::placeholder {
-            color: #9ca3af;
-          }
-        `}
-      </style>
+        {/* Custom style for PhoneInput */}
+        <style>
+          {`
+            .phone-input .PhoneInputInput {
+              background-color: #fffbeb !important;
+              color: #78350f !important;
+              padding: 14px 14px 14px 0;
+              font-size: 16px;
+              width: 100%;
+              border: none;
+              outline: none;
+              border-radius: 12px;
+            }
+            .phone-input .PhoneInputInput::placeholder {
+              color: #d97706;
+            }
+            .phone-input .PhoneInputCountrySelect {
+              background-color: #fffbeb;
+              color: #78350f;
+              border-radius: 8px;
+              margin-right: 8px;
+            }
+            .phone-input .PhoneInputCountryIcon {
+              border-radius: 4px;
+            }
+          `}
+        </style>
+      </div>
     </div>
   );
 }

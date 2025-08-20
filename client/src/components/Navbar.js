@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationContext';
-import { FaBell, FaUserCircle, FaHome, FaSearch, FaShoppingCart } from 'react-icons/fa';
+import { FaBell, FaUserCircle, FaHome, FaSearch, FaShoppingCart, FaBars, FaTimes } from 'react-icons/fa';
 
 function Navbar() {
   const { user, logout, userType } = useAuth();
@@ -13,6 +13,33 @@ function Navbar() {
   const [searchQuery, setSearchQuery] = useState('');
   const { hasNewNotifications } = useNotifications();
   const [newOrderCount, setNewOrderCount] = useState(0);
+  const [scrolled, setScrolled] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const navbarRef = useRef(null);
+  const navScrollRef = useRef(null);
+
+  // Check screen size
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Handle scroll effect for navbar
+  useEffect(() => {
+    const handleScroll = () => {
+      const isScrolled = window.scrollY > 10;
+      if (isScrolled !== scrolled) {
+        setScrolled(isScrolled);
+      }
+    };
+
+    document.addEventListener('scroll', handleScroll);
+    return () => document.removeEventListener('scroll', handleScroll);
+  }, [scrolled]);
 
   // Sync search query with URL on page load
   useEffect(() => {
@@ -43,7 +70,7 @@ function Navbar() {
 
     if (user) {
       fetchOrderCount();
-      const interval = setInterval(fetchOrderCount, 30000); // Poll every 30 seconds
+      const interval = setInterval(fetchOrderCount, 30000);
       return () => clearInterval(interval);
     }
   }, [user]);
@@ -58,8 +85,8 @@ function Navbar() {
   const handleLogout = () => {
     logout();
     navigate('/');
-    setProfileMenuOpen(false); // Close profile menu on logout
-    setIsMenuOpen(false); // Close mobile menu on logout
+    setProfileMenuOpen(false);
+    setIsMenuOpen(false);
   };
 
   const handleSearch = (e) => {
@@ -68,145 +95,333 @@ function Navbar() {
     if (trimmed === '' || !user) return;
     navigate(`/products?search=${encodeURIComponent(trimmed)}`);
     setSearchQuery('');
-    setIsMenuOpen(false); // Close mobile menu after search
+    setIsMenuOpen(false);
   };
 
   const cartItems = JSON.parse(localStorage.getItem('cart') || '[]');
   const cartVisited = localStorage.getItem('cartVisited') === 'true';
 
   return (
-    <nav className="relative bg-gradient-to-r from-indigo-600/80 to-cyan-400/80 backdrop-blur-md text-white py-4 shadow-lg border-b border-cyan-500/30 z-50">
-      {/* Increased z-index to 50 to ensure it stays above other content */}
+    <nav 
+      ref={navbarRef}
+      className={`fixed top-0 w-full transition-all duration-500 z-50 ${
+        scrolled 
+          ? 'bg-gradient-to-r from-amber-700 to-orange-600 py-2 shadow-xl' 
+          : 'bg-gradient-to-r from-amber-600 to-orange-500 py-3 shadow-lg'
+      }`}
+    >
       <div className="container mx-auto flex justify-between items-center px-4">
-        <Link to={user ? '/home' : '/'} className="text-2xl font-extrabold animate-pulseLogo flex items-center">
-          <span className="bg-gradient-to-r from-yellow-400 to-green-500 bg-clip-text text-transparent drop-shadow-lg">Nutri</span>
-          <span className="bg-gradient-to-r from-orange-500 to-red-500 bg-clip-text text-transparent drop-shadow-lg"> Store</span>
-
+        <Link 
+          to={user ? '/home' : '/'} 
+          className="text-2xl font-extrabold flex items-center group"
+        >
+          <span className="text-white drop-shadow-md">Nutri</span>
+          <span className="text-amber-200 drop-shadow-md">Store</span>
         </Link>
-        {user && (
+        
+        {user && !isMobile && (
           <>
             {/* Desktop Search */}
-            <form onSubmit={handleSearch} className="hidden md:flex items-center mx-4 space-x-2">
-              <FaSearch className="text-white" />
-              <input
-                type="text"
-                placeholder="Search for products"
-                className="px-4 py-2 rounded-lg bg-white/80 text-black focus:outline-none focus:ring-2 focus:ring-teal-400"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
+            <form onSubmit={handleSearch} className="hidden md:flex items-center mx-4 space-x-2 flex-1 max-w-xl">
+              <div className="relative w-full">
+                <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-amber-700 z-10" />
+                <input
+                  type="text"
+                  placeholder="Search for products..."
+                  className="pl-10 pr-4 py-2 w-full rounded-xl bg-white/95 text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400 shadow-lg transition-all duration-300"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
             </form>
           </>
         )}
-        <div className="hidden md:flex space-x-6 items-center">
+        
+        {/* Desktop Navigation */}
+        <div className="hidden md:flex space-x-4 items-center">
           {!user ? (
             <>
-              <Link to="/login" className="hover:text-green-200 font-bold transition duration-300">Login</Link>
-              <Link to="/signup" className="hover:text-green-200 font-bold transition duration-300">Sign Up</Link>
+              <Link 
+                to="/login" 
+                className="px-4 py-2 rounded-xl font-bold bg-amber-500 text-white hover:bg-amber-600 transition-all duration-300 shadow-md hover:shadow-lg"
+              >
+                Login
+              </Link>
+              <Link 
+                to="/signup" 
+                className="px-4 py-2 rounded-xl font-bold bg-orange-500 text-white hover:bg-orange-600 transition-all duration-300 shadow-md hover:shadow-lg"
+              >
+                Sign Up
+              </Link>
             </>
           ) : (
             <>
-              <Link to="/home" className="hover:text-yellow-300 transition duration-300">
+              <Link 
+                to="/home" 
+                className="p-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-white transition-all duration-300 group relative"
+                title="Home"
+              >
                 <FaHome className="text-xl" />
+                <span className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-1 h-1 bg-amber-300 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
               </Link>
-              <Link to="/products" className="hover:text-yellow-300 font-bold transition duration-300">Products</Link>
-              <Link to="/cart" className="relative hover:text-yellow-300 font-bold transition duration-300">
-                <FaShoppingCart className="text-xl inline mr-1" /> Cart
-                {cartItems.length > 0 && !cartVisited && <span className="notification-dot" />}
+              
+              <Link 
+                to="/products" 
+                className="px-3 py-2 rounded-xl font-bold text-white hover:bg-amber-500/30 transition-all duration-300"
+              >
+                Products
               </Link>
-              <Link to="/your-orders" className="relative hover:text-yellow-300 font-bold transition duration-300">
-                Your Orders
-                {newOrderCount > 0 && <span className="notification-dot" />}
+              
+              <Link 
+                to="/cart" 
+                className="relative px-3 py-2 rounded-xl font-bold text-white hover:bg-amber-500/30 transition-all duration-300 group"
+              >
+                <FaShoppingCart className="inline mr-1" /> Cart
+                {cartItems.length > 0 && !cartVisited && (
+                  <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
+                  </span>
+                )}
               </Link>
+              
+              <Link 
+                to="/your-orders" 
+                className="relative px-3 py-2 rounded-xl font-bold text-white hover:bg-amber-500/30 transition-all duration-300"
+              >
+                Orders
+                {newOrderCount > 0 && (
+                  <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
+                  </span>
+                )}
+              </Link>
+              
               {userType === 'Producer' && (
                 <>
-                  <Link to="/sell" className="hover:text-yellow-300 font-bold transition duration-300">Sell</Link>
-                  <Link to="/your-products" className="hover:text-yellow-300 font-bold transition duration-300">Your Products</Link>
+                  <Link 
+                    to="/sell" 
+                    className="px-3 py-2 rounded-xl font-bold text-white hover:bg-amber-500/30 transition-all duration-300"
+                  >
+                    Sell
+                  </Link>
+                  <Link 
+                    to="/your-products" 
+                    className="px-3 py-2 rounded-xl font-bold text-white hover:bg-amber-500/30 transition-all duration-300"
+                  >
+                    Your Products
+                  </Link>
                 </>
               )}
-              <Link to="/notifications" className="relative hover:text-yellow-300 transition duration-300">
+              
+              <Link 
+                to="/notifications" 
+                className="relative p-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-white transition-all duration-300 group"
+                title="Notifications"
+              >
                 <FaBell className="text-xl" />
-                {hasNewNotifications && <span className="notification-dot" />}
+                {hasNewNotifications && (
+                  <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
+                  </span>
+                )}
+                <span className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-1 h-1 bg-amber-300 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
               </Link>
+              
               <div className="relative">
-                <FaUserCircle
-                  className="text-2xl cursor-pointer hover:text-yellow-300 transition duration-300"
+                <div 
+                  className="p-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-white transition-all duration-300 cursor-pointer group"
                   onClick={() => setProfileMenuOpen(!profileMenuOpen)}
-                />
+                  title="Profile"
+                >
+                  <FaUserCircle className="text-xl" />
+                  <span className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-1 h-1 bg-amber-300 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
+                </div>
+                
                 {profileMenuOpen && (
-                  <div className="absolute right-0 mt-2 w-40 bg-white text-black rounded-lg shadow-lg z-50">
-                    {/* Increased z-index to 50 for profile menu */}
-                    <Link to="/profile" className="block px-4 py-2 hover:bg-gray-200" onClick={() => setProfileMenuOpen(false)}>Profile</Link>
-                    <Link to="/settings" className="block px-4 py-2 hover:bg-gray-200" onClick={() => setProfileMenuOpen(false)}>Settings</Link>
-                    <button
-                      onClick={handleLogout}
-                      className="w-full text-left px-4 py-2 hover:bg-red-100 text-red-600"
+                  <div className="absolute right-0 mt-2 w-40 bg-white rounded-xl shadow-2xl overflow-hidden z-50 animate-fadeIn">
+                    <Link 
+                      to="/profile" 
+                      className="block px-4 py-3 text-gray-800 hover:bg-amber-50 transition-all duration-300"
+                      onClick={() => setProfileMenuOpen(false)}
                     >
-                      Logout
-                    </button>
+                      Profile
+                    </Link>
+                    <Link 
+                      to="/settings" 
+                      className="block px-4 py-3 text-gray-800 hover:bg-amber-50 transition-all duration-300"
+                      onClick={() => setProfileMenuOpen(false)}
+                    >
+                      Settings
+                    </Link>
+                    <div className="border-t border-gray-100">
+                      <button
+                        onClick={handleLogout}
+                        className="w-full text-left px-4 py-3 text-red-600 hover:bg-red-50 transition-all duration-300"
+                      >
+                        Logout
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
             </>
           )}
         </div>
+        
+        {/* Mobile menu button */}
         <div className="md:hidden">
           <button
             onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className="text-white focus:outline-none"
+            className="text-white p-2 rounded-lg bg-amber-500/30 focus:outline-none transition-all duration-300"
           >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16m-7 6h7" />
-            </svg>
+            {isMenuOpen ? <FaTimes className="text-xl" /> : <FaBars className="text-xl" />}
           </button>
         </div>
       </div>
+      
+      {/* Mobile menu */}
       {isMenuOpen && (
-        <div className="md:hidden bg-gray-800/90 backdrop-blur-md px-4 py-4 space-y-3 animate-slideDown z-50">
-          {/* Increased z-index to 50 for mobile menu */}
+        <div className="md:hidden bg-amber-700 px-4 py-4 space-y-3 animate-slideDown">
           {!user ? (
             <>
-              <Link to="/login" onClick={() => setIsMenuOpen(false)} className="block hover:text-green-200">Login</Link>
-              <Link to="/signup" onClick={() => setIsMenuOpen(false)} className="block hover:text-green-200">Sign Up</Link>
+              <Link 
+                to="/login" 
+                onClick={() => setIsMenuOpen(false)} 
+                className="block px-4 py-3 rounded-xl bg-amber-500 text-white font-bold text-center transition-all duration-300"
+              >
+                Login
+              </Link>
+              <Link 
+                to="/signup" 
+                onClick={() => setIsMenuOpen(false)} 
+                className="block px-4 py-3 rounded-xl bg-orange-500 text-white font-bold text-center transition-all duration-300"
+              >
+                Sign Up
+              </Link>
             </>
           ) : (
             <>
-              <form onSubmit={handleSearch} className="flex items-center space-x-2 mb-4">
-                <FaSearch className="text-white" />
-                <input
-                  type="text"
-                  placeholder="Search for products"
-                  className="px-4 py-2 rounded-lg bg-white/80 text-black focus:outline-none focus:ring-2 focus:ring-teal-400 w-full"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
+              {/* Mobile Search */}
+              <form onSubmit={handleSearch} className="flex items-center mb-3">
+                <div className="relative w-full">
+                  <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-amber-700 z-10" />
+                  <input
+                    type="text"
+                    placeholder="Search for products..."
+                    className="pl-10 pr-4 py-2 w-full rounded-xl bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                </div>
               </form>
-              <Link to="/home" onClick={() => setIsMenuOpen(false)} className="block hover:text-yellow-300">Home</Link>
-              <Link to="/products" onClick={() => setIsMenuOpen(false)} className="block hover:text-yellow-300">Products</Link>
-              <Link to="/cart" onClick={() => setIsMenuOpen(false)} className="relative block hover:text-yellow-300">
-                <FaShoppingCart className="text-xl inline mr-1" /> Cart
-                {cartItems.length > 0 && !cartVisited && <span className="notification-dot" />}
-              </Link>
-              <Link to="/your-orders" onClick={() => setIsMenuOpen(false)} className="relative block hover:text-yellow-300">
-                Your Orders
-                {newOrderCount > 0 && <span className="notification-dot" />}
-              </Link>
-              {userType === 'Producer' && (
-                <>
-                  <Link to="/sell" onClick={() => setIsMenuOpen(false)} className="block hover:text-yellow-300">Sell</Link>
-                  <Link to="/your-products" onClick={() => setIsMenuOpen(false)} className="block hover:text-yellow-300">Your Products</Link>
-                </>
-              )}
-              <Link to="/notifications" onClick={() => setIsMenuOpen(false)} className="relative block hover:text-yellow-300">
-                Notifications
-                {hasNewNotifications && <span className="notification-dot" />}
-              </Link>
-              <button
-                onClick={() => { handleLogout(); setIsMenuOpen(false); }}
-                className="block text-red-400 hover:text-red-300"
-              >
-                Logout
-              </button>
+              
+              {/* Horizontal scrolling nav for mobile */}
+              <div className="overflow-x-auto pb-2 -mx-2 px-2" ref={navScrollRef}>
+                <div className="flex space-x-2 w-max">
+                  <Link 
+                    to="/home" 
+                    onClick={() => setIsMenuOpen(false)} 
+                    className="flex items-center px-4 py-2 rounded-xl bg-amber-500/20 text-white transition-all duration-300 whitespace-nowrap"
+                  >
+                    <FaHome className="mr-2" /> Home
+                  </Link>
+                  
+                  <Link 
+                    to="/products" 
+                    onClick={() => setIsMenuOpen(false)} 
+                    className="px-4 py-2 rounded-xl bg-amber-500/20 text-white font-medium transition-all duration-300 whitespace-nowrap"
+                  >
+                    Products
+                  </Link>
+                  
+                  <Link 
+                    to="/cart" 
+                    onClick={() => setIsMenuOpen(false)} 
+                    className="relative px-4 py-2 rounded-xl bg-amber-500/20 text-white font-medium transition-all duration-300 whitespace-nowrap"
+                  >
+                    <FaShoppingCart className="inline mr-1" /> Cart
+                    {cartItems.length > 0 && !cartVisited && (
+                      <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
+                      </span>
+                    )}
+                  </Link>
+                  
+                  <Link 
+                    to="/your-orders" 
+                    onClick={() => setIsMenuOpen(false)} 
+                    className="relative px-4 py-2 rounded-xl bg-amber-500/20 text-white font-medium transition-all duration-300 whitespace-nowrap"
+                  >
+                    Orders
+                    {newOrderCount > 0 && (
+                      <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
+                      </span>
+                    )}
+                  </Link>
+                  
+                  {userType === 'Producer' && (
+                    <>
+                      <Link 
+                        to="/sell" 
+                        onClick={() => setIsMenuOpen(false)} 
+                        className="px-4 py-2 rounded-xl bg-amber-500/20 text-white font-medium transition-all duration-300 whitespace-nowrap"
+                      >
+                        Sell
+                      </Link>
+                      <Link 
+                        to="/your-products" 
+                        onClick={() => setIsMenuOpen(false)} 
+                        className="px-4 py-2 rounded-xl bg-amber-500/20 text-white font-medium transition-all duration-300 whitespace-nowrap"
+                      >
+                        Your Products
+                      </Link>
+                    </>
+                  )}
+                  
+                  <Link 
+                    to="/notifications" 
+                    onClick={() => setIsMenuOpen(false)} 
+                    className="relative px-4 py-2 rounded-xl bg-amber-500/20 text-white font-medium transition-all duration-300 whitespace-nowrap"
+                  >
+                    <FaBell className="inline mr-1" /> Notifications
+                    {hasNewNotifications && (
+                      <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
+                      </span>
+                    )}
+                  </Link>
+                </div>
+              </div>
+              
+              <div className="border-t border-amber-500/30 pt-3 mt-2">
+                <Link 
+                  to="/profile" 
+                  onClick={() => setIsMenuOpen(false)} 
+                  className="block px-4 py-2 rounded-xl text-white hover:bg-amber-500/30 transition-all duration-300"
+                >
+                  Profile
+                </Link>
+                <Link 
+                  to="/settings" 
+                  onClick={() => setIsMenuOpen(false)} 
+                  className="block px-4 py-2 rounded-xl text-white hover:bg-amber-500/30 transition-all duration-300"
+                >
+                  Settings
+                </Link>
+                <button
+                  onClick={() => { handleLogout(); setIsMenuOpen(false); }}
+                  className="w-full text-left px-4 py-2 rounded-xl text-amber-200 hover:bg-amber-500/30 transition-all duration-300"
+                >
+                  Logout
+                </button>
+              </div>
             </>
           )}
         </div>
@@ -214,36 +429,5 @@ function Navbar() {
     </nav>
   );
 }
-
-const styles = `
-  @keyframes pulseLogo {
-    0%, 100% { transform: scale(1); }
-    50% { transform: scale(1.1); }
-  }
-  .animate-pulseLogo {
-    animation: pulseLogo 2.5s ease-in-out infinite;
-  }
-
-  @keyframes slideDown {
-    from { opacity: 0; transform: translateY(-10px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-  .animate-slideDown {
-    animation: slideDown 0.3s ease-out;
-  }
-
-  .notification-dot {
-    position: absolute;
-    top: -5px;
-    right: -5px;
-    width: 10px;
-    height: 10px;
-    background-color: red;
-    border-radius: 50%;
-  }
-`;
-const styleSheet = document.createElement('style');
-styleSheet.textContent = styles;
-document.head.appendChild(styleSheet);
 
 export default Navbar;

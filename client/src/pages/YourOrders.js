@@ -2,55 +2,85 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { loadRazorpay } from '../utils/razorpay';
 import { Link } from 'react-router-dom';
+import { FaArrowLeft, FaCheck, FaTimes, FaComment, FaMoneyBillWave, FaTruck, FaShoppingBag, FaSync } from 'react-icons/fa';
 
 function YourOrders() {
   const { user } = useAuth();
   const [orders, setOrders] = useState([]);
   const [error, setError] = useState(null);
   const [selectedOrder, setSelectedOrder] = useState(null);
-  const [loadingAction, setLoadingAction] = useState(null); // Track loading state for actions
-  const [chatOpen, setChatOpen] = useState(false); // State for chat modal
-  const [message, setMessage] = useState(''); // Message input
-  const [chatMessages, setChatMessages] = useState([]); // Store chat messages
-  const [loadingChat, setLoadingChat] = useState(false); // Track chat loading
+  const [loadingAction, setLoadingAction] = useState(null);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [message, setMessage] = useState('');
+  const [chatMessages, setChatMessages] = useState([]);
+  const [loadingChat, setLoadingChat] = useState(false);
+  const [filter, setFilter] = useState('all');
+  const [isLoading, setIsLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    const fetchOrders = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        if (!token) {
-          setError('No authentication token available. Please log in again.');
-          return;
-        }
-        console.log('Fetching orders with token:', token.substring(0, 10) + '...');
-
-        const response = await fetch('http://localhost:5000/api/your-orders', {
-          headers: { 'Authorization': `Bearer ${token}` },
-        });
-
-        if (!response.ok) {
-          const result = await response.text();
-          throw new Error(`HTTP error! status: ${response.status}, response: ${result}`);
-        }
-
-        const result = await response.json();
-        if (response.ok) {
-          const updatedOrders = result.map(order => ({
-            ...order,
-            expectedDeliveryDate: order.orderDate ? new Date(order.orderDate).setDate(new Date(order.orderDate).getDate() + 3) : null,
-          })).sort((a, b) => new Date(b.orderDate) - new Date(a.orderDate)); // LIFO
-          setOrders(updatedOrders);
-          console.log('Fetched Orders:', updatedOrders); // Debug log for orders
-        } else {
-          setError(result.message || 'Failed to fetch orders.');
-        }
-      } catch (err) {
-        setError(`Error fetching orders: ${err.message}`);
-        console.error('Orders error:', err);
+  // Function to fetch orders
+  const fetchOrders = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setError('No authentication token available. Please log in again.');
+        setIsLoading(false);
+        return;
       }
-    };
+
+      const response = await fetch('http://localhost:5000/api/your-orders', {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+
+      if (!response.ok) {
+        const result = await response.text();
+        throw new Error(`HTTP error! status: ${response.status}, response: ${result}`);
+      }
+
+      const result = await response.json();
+      if (response.ok) {
+        // Process orders and ensure consistent status handling
+        const updatedOrders = result.map(order => ({
+          ...order,
+          // Make sure status is consistently handled
+          status: order.status || 'pending',
+          expectedDeliveryDate: order.orderDate ? new Date(order.orderDate).setDate(new Date(order.orderDate).getDate() + 3) : null,
+        })).sort((a, b) => new Date(b.orderDate) - new Date(a.orderDate));
+        
+        setOrders(updatedOrders);
+        setError(null);
+      } else {
+        setError(result.message || 'Failed to fetch orders.');
+      }
+    } catch (err) {
+      setError(`Error fetching orders: ${err.message}`);
+      console.error('Orders error:', err);
+    } finally {
+      setIsLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  // Fetch orders on component mount
+  useEffect(() => {
     fetchOrders();
   }, []);
+
+  // Refresh orders manually
+  const handleRefresh = () => {
+    setRefreshing(true);
+    fetchOrders();
+  };
+
+  // Filter orders based on selected filter
+  const filteredOrders = orders.filter(order => {
+    if (filter === 'all') return true;
+    // Handle both 'accepted' and 'confirmed' status for accepted filter
+    if (filter === 'accepted') {
+      return order.status === 'accepted' || order.status === 'confirmed';
+    }
+    return order.status === filter;
+  });
 
   const handlePayment = async (orderId, amount) => {
     try {
@@ -76,14 +106,15 @@ function YourOrders() {
           });
           if (verifyResponse.ok) {
             alert('Payment verified! Awaiting producer approval.');
-            setOrders(orders.map(o => o._id === orderId ? { ...o, status: 'pending' } : o)); // Keep as pending
+            // Update the order status locally
+            setOrders(orders.map(o => o._id === orderId ? { ...o, status: 'pending' } : o));
           } else {
             const result = await verifyResponse.json();
             setError(result.message || 'Payment verification failed.');
           }
         },
         prefill: { name: user?.name || 'Customer', email: user?.email || 'customer@example.com', contact: user?.mobileNumber || '9999999999' },
-        theme: { color: '#3399cc' },
+        theme: { color: '#FF9D00' },
       };
       const rzp = new razorpay(options);
       rzp.open();
@@ -94,7 +125,7 @@ function YourOrders() {
   };
 
   const handleAction = async (orderId, action) => {
-    if (loadingAction) return; // Prevent multiple submissions
+    if (loadingAction) return;
     setLoadingAction(orderId);
 
     try {
@@ -119,32 +150,30 @@ function YourOrders() {
       }
 
       const result = await response.json();
+      // Update the order status locally
       setOrders(orders.map(o => o._id === orderId ? { ...o, status: action } : o));
-      console.log(`Order ${orderId} updated to ${action}`); // Debug log
       alert(result.message);
     } catch (err) {
       setError(`Error updating order: ${err.message}`);
       console.error('Action error:', err);
     } finally {
-      setLoadingAction(null); // Reset loading state
+      setLoadingAction(null);
     }
   };
 
   const openOrderDetails = (order) => {
     setSelectedOrder(order);
-    console.log('Selected Order:', order); // Debug log
   };
 
   const closeOrderDetails = () => {
     setSelectedOrder(null);
-    setChatOpen(false); // Close chat when closing details
+    setChatOpen(false);
   };
 
   const openChat = (order) => {
     setSelectedOrder(order);
     setChatOpen(true);
-    fetchChatMessages(order._id); // Fetch existing messages
-    console.log('Opening chat for Order:', order._id, 'Status:', order.status); // Debug log
+    fetchChatMessages(order._id);
   };
 
   const fetchChatMessages = async (orderId) => {
@@ -157,7 +186,6 @@ function YourOrders() {
       if (!response.ok) throw new Error('Failed to fetch chat messages');
       const messages = await response.json();
       setChatMessages(messages);
-      console.log('Fetched Chat Messages:', messages); // Debug log
     } catch (err) {
       setError(`Error fetching chat messages: ${err.message}`);
     } finally {
@@ -186,8 +214,7 @@ function YourOrders() {
       if (!response.ok) throw new Error('Failed to send message');
       const newMessage = await response.json();
       setChatMessages([...chatMessages, newMessage]);
-      setMessage(''); // Clear input
-      console.log('Message sent:', newMessage); // Debug log
+      setMessage('');
     } catch (err) {
       setError(`Error sending message: ${err.message}`);
     } finally {
@@ -195,67 +222,180 @@ function YourOrders() {
     }
   };
 
+  const getStatusIcon = (status) => {
+    switch (status) {
+      case 'confirmed':
+      case 'accepted':
+        return <FaCheck className="text-green-500 inline mr-1" />;
+      case 'declined':
+        return <FaTimes className="text-red-500 inline mr-1" />;
+      case 'pending':
+        return <FaShoppingBag className="text-amber-500 inline mr-1" />;
+      case 'shipped':
+        return <FaTruck className="text-blue-500 inline mr-1" />;
+      default:
+        return null;
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-100 to-blue-50 py-10 px-4">
+    <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-100 py-8 px-4 pt-20">
       <div className="max-w-6xl mx-auto">
-        <h1 className="text-5xl font-extrabold text-green-400 mb-12 text-center">Your Orders</h1>
-        {error ? (
-          <p className="text-center text-red-500">{error}</p>
-        ) : orders.length === 0 ? (
-          <p className="text-center text-gray-600">No orders yet.</p>
+        <div className="mb-8 flex flex-col md:flex-row items-center justify-between">
+          <h1 className="text-4xl md:text-5xl font-extrabold text-amber-900 text-center mb-4 md:mb-0">
+            Your Orders
+          </h1>
+          
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="flex items-center bg-amber-500 hover:bg-amber-600 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-300"
+          >
+            <FaSync className={`mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+            {refreshing ? 'Refreshing...' : 'Refresh Orders'}
+          </button>
+        </div>
+
+        {/* Filter buttons */}
+        <div className="flex flex-wrap justify-center gap-2 mb-6">
+          <button 
+            onClick={() => setFilter('all')} 
+            className={`px-4 py-2 rounded-full ${filter === 'all' ? 'bg-amber-500 text-white' : 'bg-white text-amber-700'} transition-all duration-300`}
+          >
+            All Orders
+          </button>
+          <button 
+            onClick={() => setFilter('pending')} 
+            className={`px-4 py-2 rounded-full ${filter === 'pending' ? 'bg-amber-500 text-white' : 'bg-white text-amber-700'} transition-all duration-300`}
+          >
+            Pending
+          </button>
+          <button 
+            onClick={() => setFilter('accepted')} 
+            className={`px-4 py-2 rounded-full ${filter === 'accepted' ? 'bg-amber-500 text-white' : 'bg-white text-amber-700'} transition-all duration-300`}
+          >
+            Accepted
+          </button>
+          <button 
+            onClick={() => setFilter('declined')} 
+            className={`px-4 py-2 rounded-full ${filter === 'declined' ? 'bg-amber-500 text-white' : 'bg-white text-amber-700'} transition-all duration-300`}
+          >
+            Declined
+          </button>
+        </div>
+
+        {isLoading ? (
+          <div className="text-center py-12">
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-amber-500"></div>
+            <p className="text-amber-700 mt-4">Loading your orders...</p>
+          </div>
+        ) : error ? (
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg text-center mb-6">
+            {error}
+          </div>
+        ) : filteredOrders.length === 0 ? (
+          <div className="text-center py-12 bg-white rounded-xl shadow-lg">
+            <div className="text-amber-500 text-6xl mb-4">📦</div>
+            <h3 className="text-2xl font-semibold text-amber-900 mb-2">No orders found</h3>
+            <p className="text-amber-700 mb-6">
+              {filter === 'all' 
+                ? "You haven't placed any orders yet." 
+                : `You don't have any ${filter} orders.`}
+            </p>
+            {filter !== 'all' && (
+              <button 
+                onClick={() => setFilter('all')}
+                className="bg-amber-500 hover:bg-amber-600 text-white font-medium py-2 px-6 rounded-lg transition-colors duration-300"
+              >
+                View All Orders
+              </button>
+            )}
+            {filter === 'all' && (
+              <Link 
+                to="/products"
+                className="inline-block bg-amber-500 hover:bg-amber-600 text-white font-medium py-2 px-6 rounded-lg transition-colors duration-300"
+              >
+                Browse Products
+              </Link>
+            )}
+          </div>
         ) : (
-          <div className="space-y-6">
-            {orders.map((order) => (
-              <div key={order._id} className="bg-white rounded-xl p-6 shadow-lg border border-gray-200">
-                <h2 className="text-xl font-semibold text-green-700">Order #{order.orderId || order._id}</h2>
-                <p>Status: <span className={
-                  order.status === 'confirmed' || order.status === 'accepted' ? 'text-green-500' :
-                  order.status === 'declined' ? 'text-red-500' :
-                  'text-yellow-500'
-                }>{order.status || 'Pending'}</span></p>
-                <p>Total: ₹{order.totalPrice || order.total}</p>
-                <p>Delivery Address: {order.deliveryAddress}</p>
-                <p>Buyer Mobile: {order.mobileNo || 'Not provided'}</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredOrders.map((order) => (
+              <div key={order._id} className="bg-white rounded-xl p-5 shadow-lg border border-amber-200 hover:shadow-xl transition-all duration-300">
+                <div className="flex justify-between items-start mb-4">
+                  <h2 className="text-lg font-semibold text-amber-900">Order #{order.orderId || order._id.substring(0, 8)}</h2>
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                    order.status === 'confirmed' || order.status === 'accepted' ? 'bg-green-100 text-green-800' :
+                    order.status === 'declined' ? 'bg-red-100 text-red-800' :
+                    'bg-amber-100 text-amber-800'
+                  }`}>
+                    {getStatusIcon(order.status)}
+                    {order.status || 'Pending'}
+                  </span>
+                </div>
+                
+                <div className="space-y-2 mb-4">
+                  <p className="text-amber-700 flex justify-between">
+                    <span>Total:</span>
+                    <span className="font-semibold">₹{order.totalPrice || order.total}</span>
+                  </p>
+                  <p className="text-amber-700">
+                    {order.items && order.items.length > 0 
+                      ? `${order.items.length} item${order.items.length > 1 ? 's' : ''}` 
+                      : '1 item'}
+                  </p>
+                  <p className="text-amber-700 text-sm">
+                    Ordered on: {new Date(order.orderDate).toLocaleDateString()}
+                  </p>
+                </div>
+
                 {order.paymentMethod !== 'cod' && order.status === 'pending' && user.userType === 'Consumer' && (
                   <button
                     onClick={() => handlePayment(order._id, order.totalPrice || order.total)}
-                    className="mt-4 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+                    className="w-full mb-3 bg-amber-500 hover:bg-amber-600 text-white py-2 rounded-lg transition-colors duration-300 flex items-center justify-center"
                   >
-                    Pay
+                    <FaMoneyBillWave className="mr-2" /> Pay Now
                   </button>
                 )}
+                
                 {user.userType === 'Producer' && order.status === 'pending' && order.sellerName === user.username && (
-                  <div className="mt-4 flex gap-2">
+                  <div className="grid grid-cols-2 gap-2 mb-3">
                     <button
                       onClick={() => handleAction(order._id, 'accepted')}
-                      className={`bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 ${loadingAction === order._id ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      className={`bg-green-500 hover:bg-green-600 text-white py-2 rounded-lg transition-colors duration-300 flex items-center justify-center ${loadingAction === order._id ? 'opacity-50 cursor-not-allowed' : ''}`}
                       disabled={loadingAction === order._id}
                     >
-                      {loadingAction === order._id ? 'Accepting...' : 'Accept'}
+                      {loadingAction === order._id ? '...' : <><FaCheck className="mr-1" /> Accept</>}
                     </button>
                     <button
                       onClick={() => handleAction(order._id, 'declined')}
-                      className={`bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 ${loadingAction === order._id ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      className={`bg-red-500 hover:bg-red-600 text-white py-2 rounded-lg transition-colors duration-300 flex items-center justify-center ${loadingAction === order._id ? 'opacity-50 cursor-not-allowed' : ''}`}
                       disabled={loadingAction === order._id}
                     >
-                      {loadingAction === order._id ? 'Declining...' : 'Decline'}
+                      {loadingAction === order._id ? '...' : <><FaTimes className="mr-1" /> Decline</>}
                     </button>
                   </div>
                 )}
-                <button
-                  onClick={() => openOrderDetails(order)}
-                  className="mt-4 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
-                >
-                  View Details
-                </button>
-                {(order.status === 'accepted' || order.status === 'confirmed') && (
+                
+                <div className="flex space-x-2">
                   <button
-                    onClick={() => openChat(order)}
-                    className="mt-4 ml-2 bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600"
+                    onClick={() => openOrderDetails(order)}
+                    className="flex-1 bg-amber-100 hover:bg-amber-200 text-amber-800 py-2 rounded-lg transition-colors duration-300"
                   >
-                    Chat
+                    Details
                   </button>
-                )}
+                  
+                  {(order.status === 'accepted' || order.status === 'confirmed') && (
+                    <button
+                      onClick={() => openChat(order)}
+                      className="bg-purple-100 hover:bg-purple-200 text-purple-800 p-2 rounded-lg transition-colors duration-300"
+                      title="Chat"
+                    >
+                      <FaComment />
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -264,76 +404,107 @@ function YourOrders() {
 
       {/* Order Details Modal */}
       {selectedOrder && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 animate-fadeIn">
-          <div className="bg-white rounded-xl p-6 w-full max-w-lg border border-green-200 shadow-2xl relative overflow-auto max-h-[90vh]">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fadeIn">
+          <div className="bg-white rounded-xl p-6 w-full max-w-lg border border-amber-200 shadow-2xl relative overflow-auto max-h-[90vh]">
             <button
               onClick={closeOrderDetails}
-              className="absolute top-2 right-2 text-gray-700 hover:text-red-500 transition-colors duration-300"
+              className="absolute top-4 right-4 text-gray-500 hover:text-amber-700 transition-colors duration-300 text-xl"
             >
               ✕
             </button>
-            <h2 className="text-2xl font-bold text-green-700 mb-4 text-center">Order Details</h2>
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-gray-700">Bill</h3>
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="bg-gray-100">
-                    <th className="p-2 border text-left">Item Name</th>
-                    <th className="p-2 border text-left">Quantity</th>
-                    <th className="p-2 border text-left">Price (₹)</th>
-                    <th className="p-2 border text-left">Total (₹)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {selectedOrder.productId && (
-                    <tr>
-                      <td className="p-2 border">{selectedOrder.itemName || 'N/A'}</td>
-                      <td className="p-2 border">{selectedOrder.quantity}</td>
-                      <td className="p-2 border">{selectedOrder.price || selectedOrder.totalPrice / selectedOrder.quantity}</td>
-                      <td className="p-2 border">{(selectedOrder.totalPrice || selectedOrder.total).toFixed(2)}</td>
+            
+            <h2 className="text-2xl font-bold text-amber-900 mb-6 flex items-center">
+              <FaShoppingBag className="mr-2 text-amber-600" /> Order Details
+            </h2>
+            
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-lg font-semibold text-amber-800 mb-3">Order Summary</h3>
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="bg-amber-50">
+                      <th className="p-2 border text-left">Item</th>
+                      <th className="p-2 border text-left">Qty</th>
+                      <th className="p-2 border text-left">Price</th>
+                      <th className="p-2 border text-left">Total</th>
                     </tr>
-                  )}
-                </tbody>
-              </table>
-              <div className="text-right mt-4">
-                <p className="text-lg font-bold">Grand Total: ₹{(selectedOrder.totalPrice || selectedOrder.total).toFixed(2)}</p>
-                <p className="text-md text-gray-600">Expected Delivery Date: {selectedOrder.expectedDeliveryDate ? new Date(selectedOrder.expectedDeliveryDate).toLocaleDateString() : 'TBD'}</p>
+                  </thead>
+                  <tbody>
+                    {selectedOrder.productId && (
+                      <tr>
+                        <td className="p-2 border">{selectedOrder.itemName || 'N/A'}</td>
+                        <td className="p-2 border">{selectedOrder.quantity}</td>
+                        <td className="p-2 border">₹{selectedOrder.price || (selectedOrder.totalPrice / selectedOrder.quantity).toFixed(2)}</td>
+                        <td className="p-2 border">₹{(selectedOrder.totalPrice || selectedOrder.total).toFixed(2)}</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+                
+                <div className="mt-4 text-right">
+                  <p className="text-lg font-bold text-amber-900">
+                    Grand Total: ₹{(selectedOrder.totalPrice || selectedOrder.total).toFixed(2)}
+                  </p>
+                  <p className="text-sm text-amber-700">
+                    Expected Delivery: {selectedOrder.expectedDeliveryDate ? new Date(selectedOrder.expectedDeliveryDate).toLocaleDateString() : 'To be determined'}
+                  </p>
+                </div>
               </div>
-              <p><strong>Buyer Name:</strong> {selectedOrder.buyerUsername || user.username}</p>
-              <p><strong>Buyer Address:</strong> {selectedOrder.deliveryAddress}</p>
-              <p><strong>Buyer Mobile Number:</strong> {selectedOrder.mobileNo || 'Not provided'}</p>
-              <p><strong>Status:</strong> <span className={
-                selectedOrder.status === 'confirmed' || selectedOrder.status === 'accepted' ? 'text-green-500' :
-                selectedOrder.status === 'declined' ? 'text-red-500' :
-                'text-yellow-500'
-              }>{selectedOrder.status || 'Pending'}</span></p>
+              
+              <div>
+                <h3 className="text-lg font-semibold text-amber-800 mb-2">Delivery Information</h3>
+                <div className="bg-amber-50 p-4 rounded-lg">
+                  <p className="text-amber-800"><span className="font-medium">Name:</span> {selectedOrder.buyerUsername || user.username}</p>
+                  <p className="text-amber-800"><span className="font-medium">Address:</span> {selectedOrder.deliveryAddress}</p>
+                  <p className="text-amber-800"><span className="font-medium">Mobile:</span> {selectedOrder.mobileNo || 'Not provided'}</p>
+                </div>
+              </div>
+              
+              <div className="flex items-center">
+                <span className="font-medium text-amber-800 mr-2">Status:</span>
+                <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                  selectedOrder.status === 'confirmed' || selectedOrder.status === 'accepted' ? 'bg-green-100 text-green-800' :
+                  selectedOrder.status === 'declined' ? 'bg-red-100 text-red-800' :
+                  'bg-amber-100 text-amber-800'
+                }`}>
+                  {getStatusIcon(selectedOrder.status)}
+                  {selectedOrder.status || 'Pending'}
+                </span>
+              </div>
+              
               {selectedOrder.status === 'declined' && user.userType === 'Consumer' && (
-                <p className="text-red-700">Sorry, your order was declined. <Link to="/products" className="underline">Order another product</Link></p>
+                <div className="bg-red-50 p-4 rounded-lg">
+                  <p className="text-red-700">
+                    Sorry, your order was declined. <Link to="/products" className="underline font-medium">Browse other products</Link>
+                  </p>
+                </div>
               )}
+              
               {user.userType === 'Producer' && selectedOrder.status === 'pending' && selectedOrder.sellerName === user.username && (
-                <div className="mt-4 flex gap-2">
+                <div className="grid grid-cols-2 gap-3">
                   <button
                     onClick={() => handleAction(selectedOrder._id, 'accepted')}
-                    className={`bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 ${loadingAction === selectedOrder._id ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    className={`bg-green-500 hover:bg-green-600 text-white py-2 rounded-lg transition-colors duration-300 flex items-center justify-center ${loadingAction === selectedOrder._id ? 'opacity-50 cursor-not-allowed' : ''}`}
                     disabled={loadingAction === selectedOrder._id}
                   >
-                    {loadingAction === selectedOrder._id ? 'Accepting...' : 'Accept'}
+                    {loadingAction === selectedOrder._id ? 'Processing...' : <><FaCheck className="mr-1" /> Accept Order</>}
                   </button>
                   <button
                     onClick={() => handleAction(selectedOrder._id, 'declined')}
-                    className={`bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 ${loadingAction === selectedOrder._id ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    className={`bg-red-500 hover:bg-red-600 text-white py-2 rounded-lg transition-colors duration-300 flex items-center justify-center ${loadingAction === selectedOrder._id ? 'opacity-50 cursor-not-allowed' : ''}`}
                     disabled={loadingAction === selectedOrder._id}
                   >
-                    {loadingAction === selectedOrder._id ? 'Declining...' : 'Decline'}
+                    {loadingAction === selectedOrder._id ? 'Processing...' : <><FaTimes className="mr-1" /> Decline Order</>}
                   </button>
                 </div>
               )}
+              
               {(selectedOrder.status === 'accepted' || selectedOrder.status === 'confirmed') && (
                 <button
                   onClick={() => openChat(selectedOrder)}
-                  className="mt-4 bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600"
+                  className="w-full bg-purple-500 hover:bg-purple-600 text-white py-2 rounded-lg transition-colors duration-300 flex items-center justify-center"
                 >
-                  Chat
+                  <FaComment className="mr-2" /> Open Chat
                 </button>
               )}
             </div>
@@ -343,60 +514,68 @@ function YourOrders() {
 
       {/* Chat Modal */}
       {chatOpen && selectedOrder && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 animate-fadeIn">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md border border-purple-200 shadow-2xl relative overflow-auto max-h-[80vh]">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fadeIn">
+          <div className="bg-white rounded-xl p-5 w-full max-w-md border border-purple-200 shadow-2xl relative max-h-[80vh] flex flex-col">
             <button
               onClick={() => setChatOpen(false)}
-              className="absolute top-2 right-2 text-gray-700 hover:text-red-500 transition-colors duration-300"
+              className="absolute top-4 right-4 text-gray-500 hover:text-purple-700 transition-colors duration-300 text-xl"
             >
               ✕
             </button>
-            <h2 className="text-2xl font-bold text-purple-700 mb-4 text-center">Chat with {selectedOrder.buyerUsername !== user.username ? selectedOrder.buyerUsername : selectedOrder.sellerName}</h2>
-            <div className="space-y-4 mb-4 max-h-60 overflow-y-auto">
+            
+            <h2 className="text-xl font-bold text-purple-800 mb-4 flex items-center">
+              <FaComment className="mr-2" /> Order Chat
+            </h2>
+            
+            <div className="flex-1 overflow-y-auto mb-4 space-y-3 pr-2">
               {loadingChat ? (
-                <p className="text-center text-gray-500">Loading messages...</p>
+                <div className="text-center py-4">
+                  <div className="inline-block animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-purple-500"></div>
+                  <p className="text-purple-700 mt-2">Loading messages...</p>
+                </div>
               ) : chatMessages.length === 0 ? (
-                <p className="text-center text-gray-500">No messages yet. Start the conversation!</p>
+                <div className="text-center py-8 text-purple-600 bg-purple-50 rounded-lg">
+                  <FaComment className="text-4xl mx-auto mb-2 opacity-50" />
+                  <p>No messages yet. Start the conversation!</p>
+                </div>
               ) : (
                 chatMessages.map((msg, index) => (
-                  <div key={index} className={`p-2 rounded-lg ${msg.sender === user.username ? 'bg-blue-100 text-right ml-auto' : 'bg-gray-100 text-left mr-auto'} max-w-xs`}>
-                    <p><strong>{msg.sender}:</strong> {msg.message}</p>
-                    <p className="text-xs text-gray-400">{new Date(msg.timestamp).toLocaleTimeString()}</p>
+                  <div key={index} className={`p-3 rounded-lg max-w-xs ${msg.sender === user.username ? 'bg-amber-100 ml-auto' : 'bg-purple-100 mr-auto'}`}>
+                    <p className="font-medium text-amber-900">{msg.sender}:</p>
+                    <p className="text-amber-800">{msg.message}</p>
+                    <p className="text-xs text-amber-600 mt-1">{new Date(msg.timestamp).toLocaleTimeString()}</p>
                   </div>
                 ))
               )}
             </div>
+            
             <div className="flex gap-2">
               <input
                 type="text"
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 placeholder="Type your message..."
-                className="flex-1 p-2 border rounded"
+                className="flex-1 p-3 border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none"
                 disabled={loadingChat}
+                onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
               />
               <button
                 onClick={sendMessage}
-                className={`bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600 ${loadingChat ? 'opacity-50 cursor-not-allowed' : ''}`}
+                className={`bg-amber-500 hover:bg-amber-600 text-white p-3 rounded-lg transition-colors duration-300 ${loadingChat ? 'opacity-50 cursor-not-allowed' : ''}`}
                 disabled={loadingChat || !message.trim()}
               >
-                {loadingChat ? 'Sending...' : 'Send'}
+                {loadingChat ? '...' : 'Send'}
               </button>
             </div>
-            {error && <p className="text-red-500 text-center mt-2">{error}</p>}
+            
+            {error && (
+              <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg mt-3">
+                {error}
+              </div>
+            )}
           </div>
         </div>
       )}
-
-      <style>{`
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        .animate-fadeIn {
-          animation: fadeIn 0.3s ease-out;
-        }
-      `}</style>
     </div>
   );
 }

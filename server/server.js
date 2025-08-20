@@ -73,18 +73,18 @@ const userSchema = new mongoose.Schema({
   userType: { type: String, enum: ['Producer', 'Consumer'], required: true },
   otp: String,
   otpExpires: Date,
-  name: { type: String, required: true },
+  name: String, // Made optional, will be required during profile update if empty
   photo: String,
   address: String,
   occupation: String,
-  kisanCard: { type: String, required: function() { return this.userType === 'Producer'; } },
-  farmerId: { type: String, required: function() { return this.userType === 'Producer'; } },
+  kisanCard: { type: String }, // Made optional, required for Producers during profile update
+  farmerId: { type: String }, // Made optional, required for Producers during profile update
   bank: {
-    accountNumber: { type: String, required: function() { return this.userType === 'Producer'; } },
-    bankName: { type: String, required: function() { return this.userType === 'Producer'; } },
-    branch: { type: String, required: function() { return this.userType === 'Producer'; } },
-    ifsc: { type: String, required: function() { return this.userType === 'Producer'; } },
-    accountHolderName: { type: String, required: function() { return this.userType === 'Producer'; } },
+    accountNumber: { type: String }, // Made optional, required for Producers during profile update
+    bankName: { type: String },
+    branch: { type: String },
+    ifsc: { type: String },
+    accountHolderName: { type: String },
   },
   listedItems: { type: Number, default: 0 },
   monthlyIncome: { type: Number, default: 0 },

@@ -38,32 +38,30 @@ function App() {
       <CartProvider>
         <NotificationProvider>
           <Router>
-            <div className="flex flex-col min-h-screen bg-gradient-to-br from-green-100 to-blue-50">
+            <div className="flex flex-col min-h-screen min-w-full bg-gradient-to-br from-green-100 to-blue-50 overflow-auto">
               <Navbar />
               <main className="flex-grow pt-8 pb-8">
-                <div className="min-h-full flex items-center justify-center">
-                  <Routes>
-                    <Route path="/" element={<Welcome />} />
-                    <Route path="/login" element={<Login />} />
-                    <Route path="/signup" element={<Signup />} />
-                    <Route path="/reset-password" element={<ResetPassword />} />
-                    <Route path="/home" element={<ProtectedRoute><Home /></ProtectedRoute>} />
-                    <Route path="/products" element={<ProtectedRoute><Products /></ProtectedRoute>} />
-                    <Route path="/products/:id" element={<ProtectedRoute><ProductDetails /></ProtectedRoute>} />
-                    <Route path="/cart" element={<ProtectedRoute><Cart /></ProtectedRoute>} />
-                    <Route path="/your-orders" element={<ProtectedRoute><YourOrders /></ProtectedRoute>} />
-                    <Route path="/sell" element={<ProtectedRoute><Sell /></ProtectedRoute>} />
-                    <Route path="/your-products" element={<ProtectedRoute><YourProducts /></ProtectedRoute>} />
-                    <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
-                    <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
-                    <Route path="/edit-profile" element={<ProtectedRoute><EditProfile /></ProtectedRoute>} />
-                    <Route path="/update-bank-details" element={<ProtectedRoute><UpdateBankDetails /></ProtectedRoute>} />
-                    <Route path="/change-password" element={<ProtectedRoute><ChangePassword /></ProtectedRoute>} />
-                    <Route path="/delete-account" element={<ProtectedRoute><DeleteAccount /></ProtectedRoute>} />
-                    <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
-                    <Route path="*" element={<h1 className="text-2xl text-gray-600">404 - Page Not Found</h1>} />
-                  </Routes>
-                </div>
+                <Routes>
+                  <Route path="/" element={<Welcome />} />
+                  <Route path="/login" element={<Login />} />
+                  <Route path="/signup" element={<Signup />} />
+                  <Route path="/reset-password" element={<ResetPassword />} />
+                  <Route path="/home" element={<ProtectedRoute><Home /></ProtectedRoute>} />
+                  <Route path="/products" element={<ProtectedRoute><Products /></ProtectedRoute>} />
+                  <Route path="/products/:id" element={<ProtectedRoute><ProductDetails /></ProtectedRoute>} />
+                  <Route path="/cart" element={<ProtectedRoute><Cart /></ProtectedRoute>} />
+                  <Route path="/your-orders" element={<ProtectedRoute><YourOrders /></ProtectedRoute>} />
+                  <Route path="/sell" element={<ProtectedRoute><Sell /></ProtectedRoute>} />
+                  <Route path="/your-products" element={<ProtectedRoute><YourProducts /></ProtectedRoute>} />
+                  <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+                  <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+                  <Route path="/edit-profile" element={<ProtectedRoute><EditProfile /></ProtectedRoute>} />
+                  <Route path="/update-bank-details" element={<ProtectedRoute><UpdateBankDetails /></ProtectedRoute>} />
+                  <Route path="/change-password" element={<ProtectedRoute><ChangePassword /></ProtectedRoute>} />
+                  <Route path="/delete-account" element={<ProtectedRoute><DeleteAccount /></ProtectedRoute>} />
+                  <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
+                  <Route path="*" element={<h1 className="text-2xl text-gray-600">404 - Page Not Found</h1>} />
+                </Routes>
               </main>
               <Footer />
             </div>
