@@ -295,7 +295,7 @@ const ProfilePage = () => {
               </div>
               <div className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-xl p-5 shadow-lg text-white text-center transform hover:scale-105 transition-transform duration-300">
                 <FaMoneyBillWave className="mx-auto text-3xl mb-2" />
-                <div className="text-lg font-semibold">Monthly Income</div>
+                <div className="text-lg font-semibold">Income</div>
                 <div className="text-2xl font-bold">₹{profile.monthlyIncome || 0}</div>
               </div>
               <div className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-xl p-5 shadow-lg text-white text-center transform hover:scale-105 transition-transform duration-300">
