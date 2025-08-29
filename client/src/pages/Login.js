@@ -151,7 +151,7 @@ function Login() {
                 onChange={(e) => setUserType(e.target.value)}
                 className="w-full pl-10 pr-4 py-3 bg-amber-50 border border-amber-300 rounded-xl text-amber-900 appearance-none focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent"
               >
-                <option value="Producer">Producer</option>
+                <option value="Producer">Farmer</option>
                 <option value="Consumer">Consumer</option>
               </select>
               <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-amber-600 pointer-events-none">
