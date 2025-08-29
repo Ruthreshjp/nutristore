@@ -55,7 +55,7 @@ const handleSignup = async (e) => {
         <h1 className="text-3xl font-bold text-amber-900 mb-6 text-center">
           Create Your Account
         </h1>
-        <p className="text-center text-amber-600 mb-4">Select your role: Producer or Consumer</p>
+        <p className="text-center text-amber-600 mb-4">Select your role: Farmer or Consumer</p>
 
         <form onSubmit={handleSignup} className="space-y-4">
           {/* Username */}
@@ -134,7 +134,7 @@ const handleSignup = async (e) => {
                 className="w-full pl-10 pr-4 py-3 bg-amber-50 border border-amber-300 rounded-xl text-amber-900 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent appearance-none transition-all duration-300"
                 required
               >
-                <option value="Producer">Producer</option>
+                <option value="Producer">Farmer</option>
                 <option value="Consumer">Consumer</option>
               </select>
               <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
