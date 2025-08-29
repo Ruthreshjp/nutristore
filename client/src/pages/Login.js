@@ -13,7 +13,7 @@ function Login() {
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [userType, setUserType] = useState('Producer');
-  const [showProfilePopup, setShowProfilePopup] = useState(false); // State for popup
+  const [showProfilePopup, setShowProfilePopup] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
 
@@ -35,14 +35,12 @@ function Login() {
         login(response.data.token, response.data.userType, response.data.username);
         setMessage('✅ Login successful!');
         
-        // Navigate to home page
-        setTimeout(() => {
-          navigate('/home');
-          // Check if profile is incomplete based on redirect
-          if (response.data.redirect === '/edit-profile') {
-            setShowProfilePopup(true);
-          }
-        }, 1000);
+        // Show popup if profile is incomplete
+        if (response.data.redirect === '/edit-profile') {
+          setShowProfilePopup(true);
+        } else {
+          setTimeout(() => navigate('/home'), 1000);
+        }
       } else {
         setMessage(response.data.message || 'Login failed.');
       }
@@ -72,7 +70,6 @@ function Login() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-100 flex items-center justify-center p-4">
       <div className="relative w-full max-w-md p-6 bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl border border-amber-200 animate-fadeIn">
-        {/* Decorative elements */}
         <div className="absolute -top-3 -right-3 w-6 h-6 bg-amber-400 rounded-full"></div>
         <div className="absolute -bottom-3 -left-3 w-8 h-8 bg-orange-400 rounded-full"></div>
         
@@ -82,7 +79,6 @@ function Login() {
         <p className="text-amber-700 text-center mb-8">Sign in to access your account</p>
 
         <form onSubmit={handleLogin} className="space-y-5">
-          {/* Email */}
           <div className="relative">
             <label className="block text-amber-800 mb-2 font-medium">Email</label>
             <div className="relative">
@@ -98,7 +94,6 @@ function Login() {
             </div>
           </div>
 
-          {/* Password (Only in normal mode) */}
           {!isOtpMode && (
             <div className="relative">
               <label className="block text-amber-800 mb-2 font-medium">Password</label>
@@ -123,7 +118,6 @@ function Login() {
             </div>
           )}
 
-          {/* OTP (Only in OTP mode) */}
           {isOtpMode && (
             <div className="relative">
               <label className="block text-amber-800 mb-2 font-medium">OTP</label>
@@ -141,7 +135,6 @@ function Login() {
             </div>
           )}
 
-          {/* User Type */}
           <div className="relative">
             <label className="block text-amber-800 mb-2 font-medium">User Type</label>
             <div className="relative">
@@ -162,7 +155,6 @@ function Login() {
             </div>
           </div>
 
-          {/* Login Button */}
           <button
             type="submit"
             disabled={isLoading}
@@ -179,7 +171,6 @@ function Login() {
             ) : isOtpMode ? 'Login with OTP' : 'Login'}
           </button>
 
-          {/* Resend OTP Button (Only in OTP mode) */}
           {isOtpMode && (
             <button
               type="button"
@@ -203,7 +194,6 @@ function Login() {
             </Link>
           </p>
 
-          {/* Toggle Mode */}
           <div className="text-center">
             <button
               type="button"
@@ -225,12 +215,11 @@ function Login() {
           </div>
         </form>
 
-        {/* Profile Completion Popup */}
         {showProfilePopup && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white p-6 rounded-2xl shadow-2xl max-w-md w-full animate-fadeIn">
               <h2 className="text-2xl font-bold text-amber-900 mb-4">Complete Your Profile</h2>
-              <p className="text-amber-700 mb-6">Your profile is incomplete. Please complete it to access all features.</p>
+              <p className="text-amber-700 mb-6">Your profile is incomplete. Please complete it to continue using Nutri-Store.</p>
               <button
                 onClick={handleEditProfile}
                 className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center"

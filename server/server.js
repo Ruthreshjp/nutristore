@@ -181,6 +181,9 @@ const profileSchema = new mongoose.Schema({
   quantitySold: { type: Number, default: 0 },
   upiId: { type: String },
   createdAt: { type: Date, default: Date.now },
+  completionPercentage: { type: Number, default: 0 },
+  verified: { type: Boolean, default: false },
+  verifiedBy: { type: String },
 });
 const Profile = mongoose.model('Profile', profileSchema);
 
@@ -550,18 +553,25 @@ app.get('/api/profile', authenticateToken, async (req, res) => {
         .reduce((sum, order) => sum + order.totalPrice, 0);
       const buyersCount = [...new Set(orders.map(order => order.buyerUsername))].length;
       const quantitySold = orders.reduce((sum, order) => sum + order.quantity, 0);
-
       dashboardMetrics = { listedItems, monthlyIncome, buyersCount, quantitySold };
       await User.updateOne({ username: user.username }, { $set: dashboardMetrics });
     }
 
-    // Fetch associated profile data
     const profile = await Profile.findOne({ userId: user._id }).lean() || {};
+
+    // Calculate completion percentage
+    const requiredFields = ['name', 'mobile', 'email', 'address', 'occupation'];
+    const roleSpecificFields = user.userType === 'Producer' ? ['kisanCard', 'farmerId'] : [];
+    const totalFields = [...requiredFields, ...roleSpecificFields];
+    const filledFields = totalFields.filter(field => profile[field]).length;
+    const completionPercentage = (filledFields / totalFields.length) * 100;
 
     res.json({
       ...user,
       ...dashboardMetrics,
       ...profile,
+      completionPercentage,
+      redirect: completionPercentage < 100 ? '/edit-profile' : null,
     });
   } catch (err) {
     console.error('Fetch profile error:', err.message);
@@ -569,6 +579,7 @@ app.get('/api/profile', authenticateToken, async (req, res) => {
   }
 });
 
+// Update Profile
 app.put('/api/profile', authenticateToken, uploadProfile, async (req, res) => {
   try {
     const { name, mobile, email, address, occupation, kisanCard, farmerId, upiId } = req.body;
@@ -580,6 +591,7 @@ app.put('/api/profile', authenticateToken, uploadProfile, async (req, res) => {
       profile = new Profile({ userId: user._id });
     }
 
+    // Update profile fields
     profile.name = name || profile.name;
     profile.mobile = mobile || profile.mobile;
     profile.email = email || profile.email;
@@ -594,8 +606,32 @@ app.put('/api/profile', authenticateToken, uploadProfile, async (req, res) => {
       profile.photo = `/Uploads/${req.file.filename}`;
     }
 
+    // Calculate completion percentage
+    const requiredFields = ['name', 'mobile', 'email', 'address', 'occupation'];
+    const roleSpecificFields = req.user.userType === 'Producer' ? ['kisanCard', 'farmerId'] : [];
+    const totalFields = [...requiredFields, ...roleSpecificFields];
+    const filledFields = totalFields.filter(field => profile[field]).length;
+    const completionPercentage = (filledFields / totalFields.length) * 100;
+    profile.completionPercentage = completionPercentage;
+
+    // Set verified status if 100% complete
+    if (completionPercentage === 100) {
+      profile.verified = true;
+      // Placeholder for certification (replace with actual logic)
+      profile.verifiedBy = req.user.userType === 'Producer' 
+        ? 'NutriStore Certified Farmer' 
+        : 'NutriStore Certified Buyer';
+    } else {
+      profile.verified = false;
+      profile.verifiedBy = null;
+    }
+
     await profile.save();
-    res.json({ message: 'Profile updated successfully', profile });
+    res.json({ 
+      message: 'Profile updated successfully', 
+      profile, 
+      redirect: completionPercentage < 100 ? '/edit-profile' : null 
+    });
   } catch (err) {
     console.error('Profile update error:', err.message);
     res.status(500).json({ message: 'Error updating profile', error: err.message });
