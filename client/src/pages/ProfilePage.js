@@ -93,23 +93,6 @@ const ProfilePage = () => {
     }
   }, [location.state]);
 
-  // No need to redirect here; handled by popup after login
-  // Remove or comment out the profile completeness check if not needed post-login
-  /*
-  useEffect(() => {
-    if (profile) {
-      const isProfileComplete = profile.name && profile.mobile && profile.address && profile.occupation && profile.upiId &&
-        (userType !== 'Producer' || (profile.bank?.accountNumber && profile.bank?.bankName && profile.bank?.branch &&
-          profile.bank?.ifsc && profile.bank?.accountHolderName && profile.kisanCard && profile.farmerId));
-      if (!isProfileComplete) {
-        navigate('/edit-profile', { state: { incomplete: true } });
-      } else if (isProfileComplete && !profile.verified) {
-        updateVerification();
-      }
-    }
-  }, [profile, userType, navigate]);
-  */
-
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-100 flex items-center justify-center">

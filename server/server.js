@@ -157,7 +157,6 @@ const messageSchema = new mongoose.Schema({
 });
 const Message = mongoose.model('Message', messageSchema);
 
-// Profile Schema
 const profileSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   name: { type: String, required: true },
@@ -180,7 +179,7 @@ const profileSchema = new mongoose.Schema({
   monthlyIncome: { type: Number, default: 0 },
   buyersCount: { type: Number, default: 0 },
   quantitySold: { type: Number, default: 0 },
-  upiId: { type: String }, // New field for UPI ID
+  upiId: { type: String },
   createdAt: { type: Date, default: Date.now },
 });
 const Profile = mongoose.model('Profile', profileSchema);
@@ -556,9 +555,13 @@ app.get('/api/profile', authenticateToken, async (req, res) => {
       await User.updateOne({ username: user.username }, { $set: dashboardMetrics });
     }
 
+    // Fetch associated profile data
+    const profile = await Profile.findOne({ userId: user._id }).lean() || {};
+
     res.json({
       ...user,
       ...dashboardMetrics,
+      ...profile,
     });
   } catch (err) {
     console.error('Fetch profile error:', err.message);
@@ -566,10 +569,9 @@ app.get('/api/profile', authenticateToken, async (req, res) => {
   }
 });
 
-// Update Profile
 app.put('/api/profile', authenticateToken, uploadProfile, async (req, res) => {
   try {
-    const { name, address, occupation, kisanCard, farmerId, upiId } = req.body;
+    const { name, mobile, email, address, occupation, kisanCard, farmerId, upiId } = req.body;
     const user = await User.findOne({ username: req.user.sellerName });
     if (!user) throw new Error('User not found');
 
@@ -579,6 +581,8 @@ app.put('/api/profile', authenticateToken, uploadProfile, async (req, res) => {
     }
 
     profile.name = name || profile.name;
+    profile.mobile = mobile || profile.mobile;
+    profile.email = email || profile.email;
     profile.address = address || profile.address;
     profile.occupation = occupation || profile.occupation;
     if (req.user.userType === 'Producer') {
