@@ -5,7 +5,7 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { FaFilter, FaSearch, FaShoppingCart, FaHeart, FaVideo, FaTimes } from 'react-icons/fa';
 
 function Products() {
-  const { token, refreshToken } = useAuth();
+  const { token, refreshToken, userType } = useAuth();
   const { addToCart } = useCart();
   const [products, setProducts] = useState([]);
   const [filteredProducts, setFilteredProducts] = useState([]);
@@ -147,6 +147,7 @@ function Products() {
   };
 
   const handleAddToCart = async (product) => {
+    if (userType === 'Producer') return; // Prevent producers from adding to cart
     if (quantity > product.quantity) {
       setErrorMessage('Requested quantity exceeds available stock!');
       return;
@@ -199,6 +200,7 @@ function Products() {
   };
 
   const handleBuyNow = (product) => {
+    if (userType === 'Producer') return; // Prevent producers from buying
     if (quantity > product.quantity) {
       setErrorMessage('Requested quantity exceeds available stock!');
       return;
@@ -441,34 +443,36 @@ function Products() {
               <p className="text-sm text-amber-700 mb-1">Harvest: {selectedProduct.harvestCondition || 'N/A'}</p>
               <p className="text-sm text-amber-700 mb-4">Delivery Time: {selectedProduct.deliveryTime || 'N/A'} days</p>
               
-              <div className="flex flex-col sm:flex-row items-center gap-3 mb-4 w-full">
-                <div className="flex items-center gap-2">
-                  <label className="text-amber-900 font-medium">Qty:</label>
-                  <input
-                    type="number"
-                    value={quantity}
-                    onChange={(e) =>
-                      setQuantity(Math.max(1, Math.min(selectedProduct.quantity, parseInt(e.target.value) || 1)))
-                    }
-                    className="w-20 px-2 py-1 bg-amber-50 border border-amber-300 rounded-md text-center text-amber-900"
-                    min="1"
-                    max={selectedProduct.quantity}
-                  />
+              {userType !== 'Producer' && (
+                <div className="flex flex-col sm:flex-row items-center gap-3 mb-4 w-full">
+                  <div className="flex items-center gap-2">
+                    <label className="text-amber-900 font-medium">Qty:</label>
+                    <input
+                      type="number"
+                      value={quantity}
+                      onChange={(e) =>
+                        setQuantity(Math.max(1, Math.min(selectedProduct.quantity, parseInt(e.target.value) || 1)))
+                      }
+                      className="w-20 px-2 py-1 bg-amber-50 border border-amber-300 rounded-md text-center text-amber-900"
+                      min="1"
+                      max={selectedProduct.quantity}
+                    />
+                  </div>
+                  <button
+                    onClick={() => handleAddToCart(selectedProduct)}
+                    className="flex-1 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-semibold py-2 px-4 rounded-lg transition-all duration-300 flex items-center justify-center gap-2"
+                    disabled={loading}
+                  >
+                    <FaShoppingCart /> Add to Cart
+                  </button>
+                  <button
+                    onClick={() => handleBuyNow(selectedProduct)}
+                    className="flex-1 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-all duration-300"
+                  >
+                    Buy Now
+                  </button>
                 </div>
-                <button
-                  onClick={() => handleAddToCart(selectedProduct)}
-                  className="flex-1 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-semibold py-2 px-4 rounded-lg transition-all duration-300 flex items-center justify-center gap-2"
-                  disabled={loading}
-                >
-                  <FaShoppingCart /> Add to Cart
-                </button>
-                <button
-                  onClick={() => handleBuyNow(selectedProduct)}
-                  className="flex-1 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-all duration-300"
-                >
-                  Buy Now
-                </button>
-              </div>
+              )}
               {errorMessage && <p className="text-red-500 text-sm mt-2 text-center">{errorMessage}</p>}
             </div>
           </div>

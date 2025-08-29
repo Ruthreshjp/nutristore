@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
-import { FaEye, FaEyeSlash, FaEnvelope, FaLock, FaUserTag } from 'react-icons/fa';
+import { FaEye, FaEyeSlash, FaEnvelope, FaLock, FaUserTag, FaEdit } from 'react-icons/fa';
 
 function Login() {
   const [email, setEmail] = useState('');
@@ -13,6 +13,7 @@ function Login() {
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [userType, setUserType] = useState('Producer');
+  const [showProfilePopup, setShowProfilePopup] = useState(false); // State for popup
   const { login } = useAuth();
   const navigate = useNavigate();
 
@@ -20,6 +21,7 @@ function Login() {
     e.preventDefault();
     setIsLoading(true);
     setMessage('');
+    setShowProfilePopup(false);
 
     try {
       const endpoint = isOtpMode ? 'verify-otp' : 'login';
@@ -32,7 +34,15 @@ function Login() {
       if (response.data.token) {
         login(response.data.token, response.data.userType, response.data.username);
         setMessage('✅ Login successful!');
-        setTimeout(() => navigate('/home'), 1000);
+        
+        // Navigate to home page
+        setTimeout(() => {
+          navigate('/home');
+          // Check if profile is incomplete based on redirect
+          if (response.data.redirect === '/edit-profile') {
+            setShowProfilePopup(true);
+          }
+        }, 1000);
       } else {
         setMessage(response.data.message || 'Login failed.');
       }
@@ -52,6 +62,11 @@ function Login() {
     } catch (error) {
       setMessage(`❌ ${error.response?.data?.message || 'Failed to send OTP.'}`);
     }
+  };
+
+  const handleEditProfile = () => {
+    setShowProfilePopup(false);
+    navigate('/edit-profile');
   };
 
   return (
@@ -209,6 +224,28 @@ function Login() {
             </button>
           </div>
         </form>
+
+        {/* Profile Completion Popup */}
+        {showProfilePopup && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white p-6 rounded-2xl shadow-2xl max-w-md w-full animate-fadeIn">
+              <h2 className="text-2xl font-bold text-amber-900 mb-4">Complete Your Profile</h2>
+              <p className="text-amber-700 mb-6">Your profile is incomplete. Please complete it to access all features.</p>
+              <button
+                onClick={handleEditProfile}
+                className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center"
+              >
+                <FaEdit className="mr-2" /> Edit Profile
+              </button>
+              <button
+                onClick={() => setShowProfilePopup(false)}
+                className="w-full mt-4 bg-amber-100 text-amber-700 py-3 rounded-xl font-semibold hover:bg-amber-200 transition-all duration-300"
+              >
+                Later
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

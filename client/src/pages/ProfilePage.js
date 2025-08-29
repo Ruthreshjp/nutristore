@@ -13,7 +13,6 @@ const ProfilePage = () => {
   const [error, setError] = useState(null);
   const [updatingVerification, setUpdatingVerification] = useState(false);
 
-  // Function to refresh token
   const refreshToken = async () => {
     const refreshToken = localStorage.getItem('refreshToken');
     if (!refreshToken) {
@@ -94,17 +93,22 @@ const ProfilePage = () => {
     }
   }, [location.state]);
 
+  // No need to redirect here; handled by popup after login
+  // Remove or comment out the profile completeness check if not needed post-login
+  /*
   useEffect(() => {
     if (profile) {
-      const isProfileComplete = profile.name && profile.mobile && profile.address && profile.occupation &&
+      const isProfileComplete = profile.name && profile.mobile && profile.address && profile.occupation && profile.upiId &&
         (userType !== 'Producer' || (profile.bank?.accountNumber && profile.bank?.bankName && profile.bank?.branch &&
           profile.bank?.ifsc && profile.bank?.accountHolderName && profile.kisanCard && profile.farmerId));
-
-      if (isProfileComplete && !profile.verified) {
+      if (!isProfileComplete) {
+        navigate('/edit-profile', { state: { incomplete: true } });
+      } else if (isProfileComplete && !profile.verified) {
         updateVerification();
       }
     }
-  }, [profile, userType]);
+  }, [profile, userType, navigate]);
+  */
 
   if (isLoading) {
     return (
@@ -133,7 +137,6 @@ const ProfilePage = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-100 pt-20 pb-10 px-4">
       <div className="container mx-auto max-w-4xl">
-        {/* Profile Header */}
         <div className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl shadow-2xl overflow-hidden mb-8">
           <div className="p-6 md:p-8 flex flex-col md:flex-row items-center justify-between">
             <div className="flex items-center mb-4 md:mb-0">
@@ -165,9 +168,7 @@ const ProfilePage = () => {
           </div>
         </div>
 
-        {/* Main Content */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Personal Info Card */}
           <div className="lg:col-span-2 bg-white rounded-2xl shadow-lg p-6">
             <h3 className="text-xl font-bold text-amber-900 mb-4 flex items-center">
               <FaUserCircle className="mr-2 text-amber-600" /> Personal Information
@@ -190,9 +191,12 @@ const ProfilePage = () => {
                 <p className="text-amber-700 font-semibold">Occupation</p>
                 <p className="text-amber-900">{profile.occupation || 'Not provided'}</p>
               </div>
+              <div className="bg-amber-50 p-4 rounded-xl">
+                <p className="text-amber-700 font-semibold">UPI ID</p>
+                <p className="text-amber-900">{profile.upiId || 'Not provided'}</p>
+              </div>
             </div>
 
-            {/* Verification Status */}
             <div className={`p-4 rounded-xl ${profile.verified ? 'bg-green-50 border border-green-200' : 'bg-amber-50 border border-amber-200'}`}>
               <div className="flex items-center">
                 {profile.verified ? (
@@ -212,7 +216,6 @@ const ProfilePage = () => {
             </div>
           </div>
 
-          {/* Stats Card */}
           <div className="bg-white rounded-2xl shadow-lg p-6">
             <h3 className="text-xl font-bold text-amber-900 mb-4 flex items-center">
               <FaShieldAlt className="mr-2 text-amber-600" /> Account Status
@@ -243,7 +246,6 @@ const ProfilePage = () => {
           </div>
         </div>
 
-        {/* Bank Details Section (for Producers) */}
         {userType === 'Producer' && profile.bank && (
           <div className="bg-white rounded-2xl shadow-lg p-6 mt-6">
             <h3 className="text-xl font-bold text-amber-900 mb-4 flex items-center">
@@ -283,7 +285,6 @@ const ProfilePage = () => {
           </div>
         )}
 
-        {/* Producer Dashboard */}
         {userType === 'Producer' && (
           <div className="mt-6">
             <h3 className="text-2xl font-bold text-amber-900 mb-6 text-center">Producer Dashboard</h3>

@@ -13,6 +13,7 @@ function EditProfile() {
     occupation: '',
     kisanCard: '',
     farmerId: '',
+    upiId: '',
     photo: null,
   });
   const [previewUrl, setPreviewUrl] = useState(null);
@@ -38,6 +39,7 @@ function EditProfile() {
           occupation: res.data.occupation || '',
           kisanCard: res.data.kisanCard || '',
           farmerId: res.data.farmerId || '',
+          upiId: res.data.upiId || '',
           photo: null,
         });
         if (res.data.photo) {
@@ -67,7 +69,6 @@ function EditProfile() {
       return;
     }
     
-    // Create preview
     const reader = new FileReader();
     reader.onload = () => {
       setPreviewUrl(reader.result);
@@ -84,6 +85,10 @@ function EditProfile() {
       setError('Name is required.');
       return;
     }
+    if (!formData.upiId) {
+      setError('UPI ID is required.');
+      return;
+    }
     if (userType === 'Producer' && (!formData.kisanCard || !formData.farmerId)) {
       setError('Kisan Card and Farmer ID are required for Producers.');
       return;
@@ -97,6 +102,7 @@ function EditProfile() {
     data.append('name', formData.name);
     data.append('address', formData.address);
     data.append('occupation', formData.occupation);
+    data.append('upiId', formData.upiId);
     if (userType === 'Producer') {
       data.append('kisanCard', formData.kisanCard);
       data.append('farmerId', formData.farmerId);
@@ -106,16 +112,15 @@ function EditProfile() {
     }
 
     try {
-      await axios.put('http://localhost:5000/api/profile', data, {
+      const res = await axios.put('http://localhost:5000/api/profile', data, {
         headers: {
           Authorization: `Bearer ${user.token}`,
           'Content-Type': 'multipart/form-data',
         },
       });
+      console.log('Profile update response:', res.data); // Debug log
       setSuccess(true);
-      setTimeout(() => {
-        navigate('/profile', { state: { refreshProfile: true } });
-      }, 1500);
+      navigate('/profile', { state: { refreshProfile: true } });
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to update profile');
       console.error('Update profile error:', err.response?.data || err.message);
@@ -138,7 +143,6 @@ function EditProfile() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-100 pt-20 pb-10 px-4">
       <div className="max-w-2xl mx-auto">
-        {/* Header */}
         <div className="flex items-center mb-6">
           <button
             onClick={() => navigate('/profile')}
@@ -153,17 +157,14 @@ function EditProfile() {
           </h1>
         </div>
 
-        {/* Success Message */}
         {success && (
           <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-xl mb-6 flex items-center animate-fadeIn">
             <FaCheckCircle className="mr-2 text-green-500" />
-            Profile updated successfully! Redirecting...
+            Profile updated successfully!
           </div>
         )}
 
-        {/* Main Card */}
         <div className="bg-white rounded-2xl shadow-2xl overflow-hidden border border-amber-200">
-          {/* Profile Photo Section */}
           <div className="bg-gradient-to-r from-amber-400 to-orange-500 p-6 text-center">
             <div className="relative inline-block">
               <div className="w-24 h-24 md:w-32 md:h-32 rounded-full bg-white/20 border-4 border-white/30 overflow-hidden mx-auto mb-4">
@@ -192,7 +193,6 @@ function EditProfile() {
             <p className="text-amber-100 text-sm mt-2">Click camera icon to upload photo</p>
           </div>
 
-          {/* Form Section */}
           <div className="p-6 md:p-8">
             {error && (
               <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg mb-6 animate-shake">
@@ -243,6 +243,21 @@ function EditProfile() {
                   onChange={handleInputChange}
                   className="w-full p-4 bg-amber-50 border border-amber-200 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-200"
                   placeholder="Your complete address"
+                />
+              </div>
+
+              <div>
+                <label className="block text-amber-900 font-medium mb-2">
+                  UPI ID <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  name="upiId"
+                  value={formData.upiId}
+                  onChange={handleInputChange}
+                  className="w-full p-4 bg-amber-50 border border-amber-200 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-200"
+                  placeholder="Enter your UPI ID (e.g., user@bank)"
+                  required
                 />
               </div>
 
@@ -311,7 +326,6 @@ function EditProfile() {
           </div>
         </div>
 
-        {/* Info Box */}
         <div className="bg-amber-100 border border-amber-200 rounded-2xl p-6 mt-6">
           <h3 className="text-amber-900 font-semibold mb-2 flex items-center">
             <FaCheckCircle className="text-amber-600 mr-2" />

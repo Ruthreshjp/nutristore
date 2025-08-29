@@ -7,18 +7,11 @@ const fs = require('fs');
 const nodemailer = require('nodemailer');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const razorpay = require('razorpay');
 require('dotenv').config();
 
 const app = express();
 const SECRET_KEY = process.env.JWT_SECRET || 'your-secret-key';
 const PORT = process.env.PORT || 5000;
-
-// Initialize Razorpay with error handling
-const razorpayInstance = new razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID || 'your_razorpay_key_id',
-  key_secret: process.env.RAZORPAY_KEY_SECRET || 'your_razorpay_key_secret',
-});
 
 // Middleware
 app.use(cors({
@@ -50,7 +43,11 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
-const upload = multer({ storage, fileFilter }).fields([
+// Multer instance for profile endpoint (single photo)
+const uploadProfile = multer({ storage, fileFilter }).single('photo');
+
+// Multer instance for product-related endpoints (multiple fields)
+const uploadProduct = multer({ storage, fileFilter }).fields([
   { name: 'image', maxCount: 1 },
   { name: 'video', maxCount: 1 },
   { name: 'photo', maxCount: 1 },
@@ -64,23 +61,23 @@ mongoose.connect('mongodb://localhost:27017/nutri-store')
     process.exit(1);
   });
 
-// User Schema
+// Schemas and Models
 const userSchema = new mongoose.Schema({
-  username: { type: String, required: true, unique: true },
-  email: { type: String, required: true, unique: true },
+  username: { type: String, required: true },
+  email: { type: String, required: true },
   password: { type: String, required: true },
-  mobileNumber: { type: String, required: true, unique: true },
+  mobileNumber: { type: String, required: true },
   userType: { type: String, enum: ['Producer', 'Consumer'], required: true },
   otp: String,
   otpExpires: Date,
-  name: String, // Made optional, will be required during profile update if empty
+  name: String,
   photo: String,
   address: String,
   occupation: String,
-  kisanCard: { type: String }, // Made optional, required for Producers during profile update
-  farmerId: { type: String }, // Made optional, required for Producers during profile update
+  kisanCard: { type: String },
+  farmerId: { type: String },
   bank: {
-    accountNumber: { type: String }, // Made optional, required for Producers during profile update
+    accountNumber: { type: String },
     bankName: { type: String },
     branch: { type: String },
     ifsc: { type: String },
@@ -95,7 +92,7 @@ const userSchema = new mongoose.Schema({
   language: { type: String, default: 'en' },
   refreshToken: { type: String },
 });
-
+userSchema.index({ email: 1, userType: 1 }, { unique: true });
 const User = mongoose.model('User', userSchema);
 
 // Product Schema
@@ -113,7 +110,6 @@ const productSchema = new mongoose.Schema({
   expiryDate: { type: Date, required: true },
   offers: String,
 }, { timestamps: true });
-
 const Product = mongoose.model('Product', productSchema);
 
 // Order Schema with custom orderId
@@ -126,10 +122,9 @@ const orderSchema = new mongoose.Schema({
   totalPrice: { type: Number, required: true },
   deliveryAddress: { type: String, required: true },
   paymentMethod: { type: String, required: true },
-  status: { type: String, enum: ['pending', 'confirmed', 'declined'], default: 'pending' },
+  status: { type: String, enum: ['pending', 'accepted', 'confirmed', 'declined'], default: 'pending' },
   orderDate: { type: Date, default: Date.now },
 });
-
 const Order = mongoose.model('Order', orderSchema);
 
 // Cart Schema
@@ -138,7 +133,6 @@ const cartSchema = new mongoose.Schema({
   product: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
   quantity: { type: Number, required: true },
 });
-
 const Cart = mongoose.model('Cart', cartSchema);
 
 // Notification Schema
@@ -148,9 +142,9 @@ const notificationSchema = new mongoose.Schema({
   sellerName: { type: String, required: true },
   deliveryAddress: { type: String, required: true },
   status: { type: String, enum: ['pending', 'accepted', 'declined'], default: 'pending' },
+  message: { type: String }, // Added field for notification text
   createdAt: { type: Date, default: Date.now },
 });
-
 const Notification = mongoose.model('Notification', notificationSchema);
 
 // Message Schema
@@ -161,8 +155,35 @@ const messageSchema = new mongoose.Schema({
   message: { type: String, required: true },
   timestamp: { type: Date, default: Date.now },
 });
-
 const Message = mongoose.model('Message', messageSchema);
+
+// Profile Schema
+const profileSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  name: { type: String, required: true },
+  mobile: { type: String },
+  email: { type: String },
+  address: { type: String },
+  occupation: { type: String },
+  photo: { type: String }, // URL to photo
+  verified: { type: Boolean, default: false },
+  bank: {
+    accountNumber: { type: String },
+    bankName: { type: String },
+    branch: { type: String },
+    ifsc: { type: String },
+    accountHolderName: { type: String },
+  },
+  kisanCard: { type: String },
+  farmerId: { type: String },
+  listedItems: { type: Number, default: 0 },
+  monthlyIncome: { type: Number, default: 0 },
+  buyersCount: { type: Number, default: 0 },
+  quantitySold: { type: Number, default: 0 },
+  upiId: { type: String }, // New field for UPI ID
+  createdAt: { type: Date, default: Date.now },
+});
+const Profile = mongoose.model('Profile', profileSchema);
 
 // Email transporter with retry logic
 let transporterReady = false;
@@ -242,17 +263,28 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
-// Signup
+// Routes
 app.post('/api/signup', async (req, res) => {
+  console.log('User model available:', !!User);
+  console.log('Received signup request:', req.body);
   const { username, email, password, mobileNumber, userType, name, address, occupation, kisanCard, farmerId, bank } = req.body;
   try {
-    const validTypes = ['Producer', 'Consumer'];
-    if (!validTypes.includes(userType)) {
-      return res.status(400).json({ message: 'Invalid user type' });
+    if (!username || !email || !password || !mobileNumber || !userType) {
+      return res.status(400).json({ message: 'Missing required fields: username, email, password, mobileNumber, and userType are mandatory.' });
     }
 
-    const exists = await User.findOne({ $or: [{ username }, { email }, { mobileNumber }] });
-    if (exists) return res.status(400).json({ message: 'User already exists' });
+    const validTypes = ['Producer', 'Consumer'];
+    if (!validTypes.includes(userType)) {
+      return res.status(400).json({ message: 'Invalid user type. Must be "Producer" or "Consumer".' });
+    }
+
+    // Check for existing email and userType combination
+    const emailExists = await User.findOne({ email, userType });
+    if (emailExists) {
+      return res.status(400).json({ 
+        message: 'A user with this email and user type already exists. Use a different email or switch user type.' 
+      });
+    }
 
     const hash = await bcrypt.hash(password, 10);
     const newUser = new User({
@@ -279,7 +311,7 @@ app.post('/api/signup', async (req, res) => {
 
     res.status(201).json({ message: 'Signup successful' });
   } catch (err) {
-    console.error('Signup error:', err.message);
+    console.error('Signup error:', err.message, { stack: err.stack, body: req.body });
     res.status(500).json({ message: 'Signup error', error: err.message });
   }
 });
@@ -289,12 +321,8 @@ app.post('/api/login', async (req, res) => {
   const { email, password, userType } = req.body;
 
   try {
-    const user = await User.findOne({ email });
-    if (!user) return res.status(401).json({ message: 'User not found' });
-
-    if (user.userType !== userType) {
-      return res.status(403).json({ message: `User type mismatch. Expected ${user.userType}` });
-    }
+    const user = await User.findOne({ email, userType });
+    if (!user) return res.status(401).json({ message: 'User not found with the provided email and user type' });
 
     const match = await bcrypt.compare(password, user.password);
     if (!match) return res.status(401).json({ message: 'Invalid password' });
@@ -539,31 +567,33 @@ app.get('/api/profile', authenticateToken, async (req, res) => {
 });
 
 // Update Profile
-app.put('/api/profile', authenticateToken, upload, async (req, res) => {
+app.put('/api/profile', authenticateToken, uploadProfile, async (req, res) => {
   try {
-    const { name, address, occupation, kisanCard, farmerId } = req.body;
-    const photo = req.files?.photo ? `/Uploads/${req.files.photo[0].filename}` : undefined;
+    const { name, address, occupation, kisanCard, farmerId, upiId } = req.body;
+    const user = await User.findOne({ username: req.user.sellerName });
+    if (!user) throw new Error('User not found');
 
-    const updateData = { name, address, occupation };
-    if (req.user.userType === 'Producer') {
-      updateData.kisanCard = kisanCard;
-      updateData.farmerId = farmerId;
+    let profile = await Profile.findOne({ userId: user._id });
+    if (!profile) {
+      profile = new Profile({ userId: user._id });
     }
-    if (photo) updateData.photo = photo;
 
-    Object.keys(updateData).forEach(key => updateData[key] === undefined && delete updateData[key]);
+    profile.name = name || profile.name;
+    profile.address = address || profile.address;
+    profile.occupation = occupation || profile.occupation;
+    if (req.user.userType === 'Producer') {
+      profile.kisanCard = kisanCard || profile.kisanCard;
+      profile.farmerId = farmerId || profile.farmerId;
+    }
+    profile.upiId = upiId || profile.upiId;
+    if (req.file) {
+      profile.photo = `/Uploads/${req.file.filename}`;
+    }
 
-    const user = await User.findOneAndUpdate(
-      { username: req.user.sellerName },
-      { $set: updateData },
-      { new: true, runValidators: true }
-    );
-
-    if (!user) return res.status(404).json({ message: 'User not found' });
-
-    res.json({ message: 'Profile updated successfully' });
+    await profile.save();
+    res.json({ message: 'Profile updated successfully', profile });
   } catch (err) {
-    console.error('Update profile error:', err.message);
+    console.error('Profile update error:', err.message);
     res.status(500).json({ message: 'Error updating profile', error: err.message });
   }
 });
@@ -689,7 +719,7 @@ app.put('/api/settings', authenticateToken, async (req, res) => {
 });
 
 // Submit Product
-app.post('/api/submit-product', authenticateToken, upload, async (req, res) => {
+app.post('/api/submit-product', authenticateToken, uploadProduct, async (req, res) => {
   try {
     if (req.user.userType !== 'Producer') {
       return res.status(403).json({ message: 'Only Producers can submit products' });
@@ -789,7 +819,7 @@ app.delete('/api/products/:id', authenticateToken, async (req, res) => {
 });
 
 // Update Product
-app.put('/api/products/:id', authenticateToken, upload, async (req, res) => {
+app.put('/api/products/:id', authenticateToken, uploadProduct, async (req, res) => {
   try {
     if (req.user.userType !== 'Producer') {
       return res.status(403).json({ message: 'Only Producers can update products' });
@@ -835,6 +865,7 @@ app.put('/api/products/:id', authenticateToken, upload, async (req, res) => {
   }
 });
 
+// Fetch All Products
 app.get('/api/products', async (req, res) => {
   try {
     const { sort, limit, search } = req.query;
@@ -1013,16 +1044,7 @@ app.post('/api/place-order', authenticateToken, async (req, res) => {
     if (paymentMethod === 'cod') {
       res.json({ message: 'Order placed successfully', orderId, status: 'pending', redirect: '/your-orders' });
     } else {
-      const razorpayOrder = await razorpayInstance.orders.create({
-        amount: calculatedTotal * 100,
-        currency: 'INR',
-        receipt: `order_rcptid_${orderId}`,
-        notes: {
-          buyerUsername: req.user.sellerName,
-          orderIds: orders.map(o => o._id),
-        },
-      });
-      res.json({ message: 'Order created', order_id: razorpayOrder.id, amount: calculatedTotal });
+      res.json({ message: 'Order placed successfully', orderId, status: 'pending', redirect: '/your-orders' });
     }
   } catch (err) {
     console.error('Place order error:', err.message, { stack: err.stack, body: req.body });
@@ -1084,39 +1106,38 @@ app.post('/api/confirm-order/:orderId', authenticateToken, async (req, res) => {
   }
 });
 
-// Verify Payment
+// Verify Payment (Placeholder since Razorpay is removed)
 app.post('/api/verify-payment', authenticateToken, async (req, res) => {
-  const { orderId, paymentId } = req.body;
-
-  try {
-    const order = await Order.findOne({ orderId });
-    if (!order) return res.status(404).json({ message: 'Order not found' });
-
-    const payment = await razorpayInstance.payments.fetch(paymentId);
-    if (payment.status === 'captured') {
-      res.json({ message: 'Payment verified successfully' });
-    } else {
-      res.status(400).json({ message: 'Payment not captured' });
-    }
-  } catch (err) {
-    console.error('Verify payment error:', err.message);
-    res.status(500).json({ message: 'Error verifying payment', error: err.message });
-  }
+  res.status(400).json({ message: 'Payment verification not supported without payment gateway' });
 });
 
 // Fetch Notifications
 app.get('/api/notifications', authenticateToken, async (req, res) => {
   try {
-    const notifications = await Notification.find({ sellerName: req.user.sellerName }).populate('orderId').lean();
+    const user = await User.findOne({ username: req.user.sellerName });
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    let notifications;
+    if (user.userType === 'Producer') {
+      notifications = await Notification.find({ sellerName: req.user.sellerName }).populate('orderId').lean();
+    } else { // Consumer
+      notifications = await Notification.find({ buyerUsername: req.user.sellerName }).populate('orderId').lean();
+    }
+
     if (!notifications || notifications.length === 0) {
       return res.status(404).json({ message: 'No notifications found' });
     }
+
     res.json(notifications.map(n => ({
       _id: n._id,
-      orderId: n.orderId._id,
+      orderId: n.orderId?._id,
       buyerUsername: n.buyerUsername,
-      deliveryAddress: n.orderId.deliveryAddress,
+      sellerName: n.sellerName,
+      deliveryAddress: n.deliveryAddress,
       status: n.status,
+      message: n.message,
       createdAt: n.createdAt,
     })));
   } catch (err) {
@@ -1139,25 +1160,6 @@ app.post('/api/notification-action/:id', authenticateToken, async (req, res) => 
     }
     notification.status = action;
     await notification.save();
-    const order = await Order.findById(notification.orderId);
-    order.status = action === 'accepted' ? 'confirmed' : 'declined';
-    await order.save();
-    if (action === 'accepted') {
-      const product = await Product.findById(order.productId);
-      if (product) {
-        product.quantity -= order.quantity;
-        await product.save();
-      }
-    }
-    const buyer = await User.findOne({ username: notification.buyerUsername });
-    if (buyer && buyer.email && buyer.notifications) {
-      await transporter.sendMail({
-        from: `"Nutri Store" <${process.env.EMAIL_USER}>`,
-        to: buyer.email,
-        subject: `Order ${action === 'accepted' ? 'Processed' : 'Declined'}`,
-        text: `Your order #${order._id} has been ${action} on ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}. ${action === 'accepted' ? 'Go to Your Orders page.' : 'Try another product.'}`,
-      });
-    }
     res.json({ message: `Notification ${action} successfully` });
   } catch (err) {
     console.error('Notification action error:', err.message);
@@ -1247,13 +1249,47 @@ app.post('/api/order-action/:id', authenticateToken, async (req, res) => {
       return res.status(403).json({ message: 'Unauthorized to perform action on this order' });
     }
 
-    order.status = action === 'accepted' ? 'confirmed' : 'declined';
+    order.status = action;
     await order.save();
 
-    const notification = await Notification.findOne({ orderId: order._id });
-    if (notification) {
-      notification.status = action;
-      await notification.save();
+    // Update or create notification for the buyer (not the producer)
+    let buyerNotification = await Notification.findOne({ orderId: order._id, buyerUsername: order.buyerUsername });
+    const expectedDeliveryDate = action === 'accepted' ? new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' }) : null;
+    if (!buyerNotification) {
+      buyerNotification = new Notification({
+        orderId: order._id,
+        buyerUsername: order.buyerUsername,
+        sellerName: order.sellerName,
+        deliveryAddress: order.deliveryAddress,
+        status: action,
+        message: action === 'accepted'
+          ? `Your order #${order._id} has been accepted on ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}. Expected delivery by ${expectedDeliveryDate}.`
+          : `Your order #${order._id} has been declined on ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}. Please contact support or try another product.`,
+      });
+    } else {
+      buyerNotification.status = action;
+      buyerNotification.message = action === 'accepted'
+        ? `Your order #${order._id} has been accepted on ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}. Expected delivery by ${expectedDeliveryDate}.`
+        : `Your order #${order._id} has been declined on ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}. Please contact support or try another product.`;
+    }
+    await buyerNotification.save();
+
+    // Update or create notification for the producer (optional, for tracking)
+    let producerNotification = await Notification.findOne({ orderId: order._id, sellerName: order.sellerName });
+    if (!producerNotification) {
+      producerNotification = new Notification({
+        orderId: order._id,
+        buyerUsername: order.buyerUsername,
+        sellerName: order.sellerName,
+        deliveryAddress: order.deliveryAddress,
+        status: action,
+        message: `Order #${order._id} from ${order.buyerUsername} has been ${action}.`,
+      });
+      await producerNotification.save();
+    } else {
+      producerNotification.status = action;
+      producerNotification.message = `Order #${order._id} from ${order.buyerUsername} has been ${action}.`;
+      await producerNotification.save();
     }
 
     if (action === 'accepted') {
@@ -1274,14 +1310,17 @@ app.post('/api/order-action/:id', authenticateToken, async (req, res) => {
           from: `"Nutri Store" <${process.env.EMAIL_USER}>`,
           to: counterparty.email,
           subject: `Order ${action === 'accepted' ? 'Accepted' : 'Declined'}`,
-          text: `Your order #${order._id} has been ${action} on ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}. ${action === 'accepted' ? 'Your order is being processed.' : 'Please contact support or try another product.'}`,
+          text: action === 'accepted'
+            ? `Your order #${order._id} has been accepted on ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}. Expected delivery by ${expectedDeliveryDate}. Your order is being processed.`
+            : `Your order #${order._id} has been declined on ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}. Please contact support or try another product.`,
         });
+        console.log(`Notification email sent to ${counterparty.email} for order ${order._id}`);
       } catch (emailErr) {
-        console.error('Email notification failed:', emailErr.message);
+        console.error(`Failed to send notification email to ${counterparty.email} for order ${order._id}:`, emailErr.message);
       }
     }
 
-    res.json({ message: `Order ${action} successfully` });
+    res.json({ message: `Order ${action} successfully`, status: action });
   } catch (err) {
     console.error('Order action error:', err.message, { orderId: id, user: req.user.sellerName, stack: err.stack });
     res.status(500).json({ message: 'Error processing order action', error: err.message });

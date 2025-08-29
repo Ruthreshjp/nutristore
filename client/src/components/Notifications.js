@@ -9,7 +9,7 @@ function Notifications() {
   const [error, setError] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('all'); // 'all', 'unread', 'read'
+  const [filter, setFilter] = useState('all');
 
   useEffect(() => {
     const fetchNotifications = async () => {
@@ -32,7 +32,6 @@ function Notifications() {
         }
 
         const result = await response.json();
-        // Reverse the notifications array to show latest first
         setNotifications(result.reverse());
       } catch (err) {
         setError(`Error fetching notifications: ${err.message}`);
@@ -133,7 +132,6 @@ function Notifications() {
         throw new Error(result.message || `HTTP error! status: ${response.status}`);
       }
 
-      // Update local state to mark all as read
       setNotifications(notifications.map(n => ({ ...n, status: n.status || 'read' })));
     } catch (err) {
       setError(`Error marking notifications as read: ${err.message}`);
@@ -144,7 +142,7 @@ function Notifications() {
   const filteredNotifications = notifications.filter(notification => {
     if (filter === 'unread') return !notification.status;
     if (filter === 'read') return notification.status;
-    return true; // 'all'
+    return true;
   });
 
   const hasNewNotifications = notifications.some(n => !n.status);
@@ -176,7 +174,6 @@ function Notifications() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-50 py-8 px-4 pt-24">
       <div className="max-w-4xl mx-auto">
-        {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-center mb-8">
           <div className="flex items-center mb-4 md:mb-0">
             <div className="bg-gradient-to-r from-amber-500 to-orange-500 p-3 rounded-xl shadow-lg mr-4">
@@ -190,7 +187,6 @@ function Notifications() {
               </span>
             )}
           </div>
-          
           <div className="flex flex-wrap gap-2">
             <div className="bg-white rounded-lg p-1 shadow-inner">
               <button
@@ -212,7 +208,6 @@ function Notifications() {
                 Read
               </button>
             </div>
-            
             {hasNewNotifications && (
               <button
                 onClick={markAllAsRead}
@@ -224,7 +219,6 @@ function Notifications() {
           </div>
         </div>
 
-        {/* Error Message */}
         {error && (
           <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg shadow-md">
             <div className="flex items-center">
@@ -234,14 +228,12 @@ function Notifications() {
           </div>
         )}
 
-        {/* Loading State */}
         {loading && (
           <div className="flex justify-center items-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-amber-500"></div>
           </div>
         )}
 
-        {/* Empty State */}
         {!loading && filteredNotifications.length === 0 && (
           <div className="bg-white rounded-2xl p-8 text-center shadow-lg">
             <div className="bg-amber-100 p-4 rounded-full inline-flex items-center justify-center mb-4">
@@ -262,7 +254,6 @@ function Notifications() {
           </div>
         )}
 
-        {/* Notifications List */}
         {!loading && filteredNotifications.length > 0 && (
           <div className="space-y-4">
             {filteredNotifications.map((notification) => (
@@ -284,11 +275,16 @@ function Notifications() {
                         Order #{notification.orderId}
                       </h3>
                       <p className="text-gray-600 mb-2">
-                        <span className="font-medium">Buyer:</span> {notification.buyerUsername}
+                        {user.userType === 'Producer' ? (
+                          <><span className="font-medium">Buyer:</span> {notification.buyerUsername}</>
+                        ) : (
+                          <><span className="font-medium">Seller:</span> {notification.sellerName}</>
+                        )}
                       </p>
                       <p className="text-gray-600 mb-2">
                         <span className="font-medium">Address:</span> {notification.deliveryAddress}
                       </p>
+                      <p className="text-gray-700">{notification.message}</p>
                       <div className="flex flex-wrap gap-2 mt-3">
                         <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(notification.status)}`}>
                           {notification.status || 'Pending'}
@@ -296,7 +292,6 @@ function Notifications() {
                       </div>
                     </div>
                   </div>
-                  
                   <button
                     onClick={() => handleDelete(notification._id)}
                     className="text-gray-400 hover:text-red-500 transition-colors p-1"
@@ -306,7 +301,7 @@ function Notifications() {
                   </button>
                 </div>
 
-                {/* Action Buttons */}
+                {/* Show action buttons only if status is not set and user is Producer */}
                 {!notification.status && user.userType === 'Producer' && (
                   <div className="mt-4 flex flex-wrap gap-2">
                     <button
@@ -324,7 +319,7 @@ function Notifications() {
                   </div>
                 )}
 
-                {/* Status Links */}
+                {/* Status Links based on action */}
                 {notification.status === 'accepted' && (
                   <div className="mt-4">
                     <Link 
@@ -335,7 +330,6 @@ function Notifications() {
                     </Link>
                   </div>
                 )}
-                
                 {notification.status === 'declined' && (
                   <div className="mt-4">
                     <Link 
@@ -346,7 +340,6 @@ function Notifications() {
                     </Link>
                   </div>
                 )}
-                
                 {!notification.status && user.userType !== 'Producer' && (
                   <div className="mt-4">
                     <Link 
@@ -362,13 +355,11 @@ function Notifications() {
           </div>
         )}
 
-        {/* Delete Confirmation Modal */}
         {confirmDelete && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-white p-6 rounded-2xl shadow-xl max-w-md w-full">
               <h2 className="text-xl font-bold text-amber-900 mb-4">Confirm Delete</h2>
               <p className="text-gray-600 mb-4">Are you sure you want to delete this notification? This action cannot be undone.</p>
-              
               <div className="flex flex-col sm:flex-row gap-3 justify-end">
                 <button 
                   onClick={cancelDelete}

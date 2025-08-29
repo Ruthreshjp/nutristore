@@ -17,8 +17,8 @@ function YourOrders() {
   const [filter, setFilter] = useState('all');
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [notificationStatus, setNotificationStatus] = useState({ orderId: null, success: null });
 
-  // Function to fetch orders
   const fetchOrders = async () => {
     try {
       const token = localStorage.getItem('token');
@@ -39,14 +39,11 @@ function YourOrders() {
 
       const result = await response.json();
       if (response.ok) {
-        // Process orders and ensure consistent status handling
         const updatedOrders = result.map(order => ({
           ...order,
-          // Make sure status is consistently handled
-          status: order.status || 'pending',
+          status: order.status || 'pending', // Ensure status is always defined
           expectedDeliveryDate: order.orderDate ? new Date(order.orderDate).setDate(new Date(order.orderDate).getDate() + 3) : null,
         })).sort((a, b) => new Date(b.orderDate) - new Date(a.orderDate));
-        
         setOrders(updatedOrders);
         setError(null);
       } else {
@@ -61,24 +58,18 @@ function YourOrders() {
     }
   };
 
-  // Fetch orders on component mount
   useEffect(() => {
     fetchOrders();
   }, []);
 
-  // Refresh orders manually
   const handleRefresh = () => {
     setRefreshing(true);
     fetchOrders();
   };
 
-  // Filter orders based on selected filter
   const filteredOrders = orders.filter(order => {
     if (filter === 'all') return true;
-    // Handle both 'accepted' and 'confirmed' status for accepted filter
-    if (filter === 'accepted') {
-      return order.status === 'accepted' || order.status === 'confirmed';
-    }
+    if (filter === 'accepted') return order.status === 'accepted' || order.status === 'confirmed';
     return order.status === filter;
   });
 
@@ -106,7 +97,6 @@ function YourOrders() {
           });
           if (verifyResponse.ok) {
             alert('Payment verified! Awaiting producer approval.');
-            // Update the order status locally
             setOrders(orders.map(o => o._id === orderId ? { ...o, status: 'pending' } : o));
           } else {
             const result = await verifyResponse.json();
@@ -127,6 +117,7 @@ function YourOrders() {
   const handleAction = async (orderId, action) => {
     if (loadingAction) return;
     setLoadingAction(orderId);
+    setNotificationStatus({ orderId, success: null });
 
     try {
       const token = localStorage.getItem('token');
@@ -150,11 +141,12 @@ function YourOrders() {
       }
 
       const result = await response.json();
-      // Update the order status locally
       setOrders(orders.map(o => o._id === orderId ? { ...o, status: action } : o));
+      setNotificationStatus({ orderId, success: true });
       alert(result.message);
     } catch (err) {
       setError(`Error updating order: ${err.message}`);
+      setNotificationStatus({ orderId, success: false });
       console.error('Action error:', err);
     } finally {
       setLoadingAction(null);
@@ -168,6 +160,7 @@ function YourOrders() {
   const closeOrderDetails = () => {
     setSelectedOrder(null);
     setChatOpen(false);
+    setNotificationStatus({ orderId: null, success: null });
   };
 
   const openChat = (order) => {
@@ -224,8 +217,8 @@ function YourOrders() {
 
   const getStatusIcon = (status) => {
     switch (status) {
-      case 'confirmed':
       case 'accepted':
+      case 'confirmed':
         return <FaCheck className="text-green-500 inline mr-1" />;
       case 'declined':
         return <FaTimes className="text-red-500 inline mr-1" />;
@@ -245,7 +238,6 @@ function YourOrders() {
           <h1 className="text-4xl md:text-5xl font-extrabold text-amber-900 text-center mb-4 md:mb-0">
             Your Orders
           </h1>
-          
           <button
             onClick={handleRefresh}
             disabled={refreshing}
@@ -256,7 +248,6 @@ function YourOrders() {
           </button>
         </div>
 
-        {/* Filter buttons */}
         <div className="flex flex-wrap justify-center gap-2 mb-6">
           <button 
             onClick={() => setFilter('all')} 
@@ -326,7 +317,7 @@ function YourOrders() {
                 <div className="flex justify-between items-start mb-4">
                   <h2 className="text-lg font-semibold text-amber-900">Order #{order.orderId || order._id.substring(0, 8)}</h2>
                   <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                    order.status === 'confirmed' || order.status === 'accepted' ? 'bg-green-100 text-green-800' :
+                    order.status === 'accepted' || order.status === 'confirmed' ? 'bg-green-100 text-green-800' :
                     order.status === 'declined' ? 'bg-red-100 text-red-800' :
                     'bg-amber-100 text-amber-800'
                   }`}>
@@ -378,6 +369,12 @@ function YourOrders() {
                   </div>
                 )}
                 
+                {notificationStatus.orderId === order._id && (
+                  <div className={`mt-2 text-sm ${notificationStatus.success ? 'text-green-600' : 'text-red-600'}`}>
+                    {notificationStatus.success ? 'Notification sent to buyer!' : 'Failed to send notification.'}
+                  </div>
+                )}
+
                 <div className="flex space-x-2">
                   <button
                     onClick={() => openOrderDetails(order)}
@@ -385,7 +382,6 @@ function YourOrders() {
                   >
                     Details
                   </button>
-                  
                   {(order.status === 'accepted' || order.status === 'confirmed') && (
                     <button
                       onClick={() => openChat(order)}
@@ -402,7 +398,6 @@ function YourOrders() {
         )}
       </div>
 
-      {/* Order Details Modal */}
       {selectedOrder && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fadeIn">
           <div className="bg-white rounded-xl p-6 w-full max-w-lg border border-amber-200 shadow-2xl relative overflow-auto max-h-[90vh]">
@@ -463,7 +458,7 @@ function YourOrders() {
               <div className="flex items-center">
                 <span className="font-medium text-amber-800 mr-2">Status:</span>
                 <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                  selectedOrder.status === 'confirmed' || selectedOrder.status === 'accepted' ? 'bg-green-100 text-green-800' :
+                  selectedOrder.status === 'accepted' || selectedOrder.status === 'confirmed' ? 'bg-green-100 text-green-800' :
                   selectedOrder.status === 'declined' ? 'bg-red-100 text-red-800' :
                   'bg-amber-100 text-amber-800'
                 }`}>
@@ -499,6 +494,12 @@ function YourOrders() {
                 </div>
               )}
               
+              {notificationStatus.orderId === selectedOrder._id && (
+                <div className={`mt-2 text-sm ${notificationStatus.success ? 'text-green-600' : 'text-red-600'}`}>
+                  {notificationStatus.success ? 'Notification sent to buyer!' : 'Failed to send notification. Please try again later.'}
+                </div>
+              )}
+
               {(selectedOrder.status === 'accepted' || selectedOrder.status === 'confirmed') && (
                 <button
                   onClick={() => openChat(selectedOrder)}
@@ -512,7 +513,6 @@ function YourOrders() {
         </div>
       )}
 
-      {/* Chat Modal */}
       {chatOpen && selectedOrder && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fadeIn">
           <div className="bg-white rounded-xl p-5 w-full max-w-md border border-purple-200 shadow-2xl relative max-h-[80vh] flex flex-col">

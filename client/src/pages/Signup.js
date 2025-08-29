@@ -15,31 +15,35 @@ function Signup() {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleSignup = async (e) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setMessage('');
-    try {
-      const response = await axios.post('http://localhost:5000/api/signup', {
-        username,
-        email,
-        password,
-        mobileNumber,
-        userType,
-      });
-      setMessage(response.data.message);
-      if (response.data.message === 'Signup successful! Please login.') {
-        setTimeout(() => navigate('/login'), 1500);
-      }
-    } catch (error) {
-      const errorMsg = error.response?.data?.message || error.message || 'An unexpected error occurred';
-      setMessage(`Signup error: ${errorMsg}`);
-      console.error('Signup error details:', error.response?.data || error);
-    } finally {
-      setIsLoading(false);
+const handleSignup = async (e) => {
+  e.preventDefault();
+  setIsLoading(true);
+  setMessage('');
+  try {
+    const response = await axios.post('http://localhost:5000/api/signup', {
+      username,
+      email,
+      password,
+      mobileNumber,
+      userType,
+    });
+    setMessage(response.data.message);
+    if (response.data.message === 'Signup successful') {
+      setTimeout(() => navigate('/login'), 1500);
     }
-  };
-
+  } catch (error) {
+    const errorMsg = error.response?.data?.message || error.response?.data || error.message || 'An unexpected error occurred';
+    console.log('Full error response:', error.response?.data);
+    if (typeof errorMsg === 'string' && errorMsg.includes('already exists')) {
+      setMessage('Signup error: A user with this email and user type already exists. Try a different email or switch user type.');
+    } else {
+      setMessage(`Signup error: ${errorMsg}`);
+    }
+    console.error('Signup error details:', error.response?.data || error);
+  } finally {
+    setIsLoading(false);
+  }
+};
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-100 flex items-center justify-center p-4">
       <div className="relative w-full max-w-md p-6 bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl border border-amber-200 transform transition-all duration-700 animate-fadeIn">
@@ -51,11 +55,12 @@ function Signup() {
         <h1 className="text-3xl font-bold text-amber-900 mb-6 text-center">
           Create Your Account
         </h1>
+        <p className="text-center text-amber-600 mb-4">Select your role: Producer or Consumer</p>
 
         <form onSubmit={handleSignup} className="space-y-4">
           {/* Username */}
           <div className="relative">
-            <label className="block text-amber-800 mb-2 font-medium">Username</label>
+            <label className="block text-amber-800 mb-2 font-medium">Username <span className="text-red-500">*</span></label>
             <div className="relative">
               <FaUser className="absolute left-3 top-1/2 transform -translate-y-1/2 text-amber-600 z-10" />
               <input
@@ -71,7 +76,7 @@ function Signup() {
 
           {/* Email */}
           <div className="relative">
-            <label className="block text-amber-800 mb-2 font-medium">Email</label>
+            <label className="block text-amber-800 mb-2 font-medium">Email <span className="text-red-500">*</span></label>
             <div className="relative">
               <FaEnvelope className="absolute left-3 top-1/2 transform -translate-y-1/2 text-amber-600 z-10" />
               <input
@@ -87,7 +92,7 @@ function Signup() {
 
           {/* Password */}
           <div className="relative">
-            <label className="block text-amber-800 mb-2 font-medium">Password</label>
+            <label className="block text-amber-800 mb-2 font-medium">Password <span className="text-red-500">*</span></label>
             <div className="relative">
               <FaLock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-amber-600 z-10" />
               <input
@@ -103,7 +108,7 @@ function Signup() {
 
           {/* Mobile Number */}
           <div className="relative">
-            <label className="block text-amber-800 mb-2 font-medium">Mobile Number</label>
+            <label className="block text-amber-800 mb-2 font-medium">Mobile Number <span className="text-red-500">*</span></label>
             <div className="relative">
               <FaPhone className="absolute left-3 top-1/2 transform -translate-y-1/2 text-amber-600 z-10" />
               <PhoneInput
@@ -120,7 +125,7 @@ function Signup() {
 
           {/* User Type Selection */}
           <div className="relative">
-            <label className="block text-amber-800 mb-2 font-medium">User Type</label>
+            <label className="block text-amber-800 mb-2 font-medium">User Type <span className="text-red-500">*</span></label>
             <div className="relative">
               <FaUserTag className="absolute left-3 top-1/2 transform -translate-y-1/2 text-amber-600 z-10" />
               <select
@@ -138,6 +143,7 @@ function Signup() {
                 </svg>
               </div>
             </div>
+            <p className="text-xs text-amber-600 mt-1">Note: You can sign up with the same email as a different user type.</p>
           </div>
 
           {/* Submit Button */}
