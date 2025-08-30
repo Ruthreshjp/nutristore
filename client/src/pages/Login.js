@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
@@ -12,16 +12,28 @@ function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [userType, setUserType] = useState('Producer');
+  const [userType, setUserType] = useState(''); // Remove default to force selection
   const [showProfilePopup, setShowProfilePopup] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+
+  // Set default userType based on localStorage or leave empty
+  useEffect(() => {
+    const savedUserType = localStorage.getItem('lastUserType') || '';
+    setUserType(savedUserType);
+  }, []);
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setIsLoading(true);
     setMessage('');
     setShowProfilePopup(false);
+
+    if (!userType) {
+      setMessage('❌ Please select a user type.');
+      setIsLoading(false);
+      return;
+    }
 
     try {
       const endpoint = isOtpMode ? 'verify-otp' : 'login';
@@ -34,9 +46,16 @@ function Login() {
       if (response.data.token) {
         login(response.data.token, response.data.userType, response.data.username);
         setMessage('✅ Login successful!');
-        
-        // Show popup if profile is incomplete
-        if (response.data.redirect === '/edit-profile') {
+
+        // Save the used userType for next time
+        localStorage.setItem('lastUserType', userType);
+
+        // Fetch profile to check completion
+        const profileRes = await axios.get('http://localhost:5000/api/profile', {
+          headers: { Authorization: `Bearer ${response.data.token}` },
+        });
+        const completionPercentage = profileRes.data.completionPercentage || 0;
+        if (completionPercentage < 100) {
           setShowProfilePopup(true);
         } else {
           setTimeout(() => navigate('/home'), 1000);
@@ -52,10 +71,13 @@ function Login() {
   };
 
   const handleSendOtp = async () => {
-    if (!email) return setMessage('Please enter your email.');
-
+    if (!email || !userType) {
+      setMessage('❌ Please enter your email and select a user type.');
+      return;
+    }
     try {
-      const response = await axios.post('http://localhost:5000/api/send-otp', { email });
+      // Send userType with OTP request to associate it with the email
+      const response = await axios.post('http://localhost:5000/api/send-otp', { email, userType });
       setMessage(response.data.message || 'OTP sent to your email.');
     } catch (error) {
       setMessage(`❌ ${error.response?.data?.message || 'Failed to send OTP.'}`);
@@ -143,7 +165,9 @@ function Login() {
                 value={userType}
                 onChange={(e) => setUserType(e.target.value)}
                 className="w-full pl-10 pr-4 py-3 bg-amber-50 border border-amber-300 rounded-xl text-amber-900 appearance-none focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent"
+                required
               >
+                <option value="">Select User Type</option>
                 <option value="Producer">Farmer</option>
                 <option value="Consumer">Consumer</option>
               </select>
@@ -203,10 +227,7 @@ function Login() {
                 setPassword('');
                 setOtp('');
                 setMessage('');
-
-                if (newOtpMode && email) {
-                  handleSendOtp();
-                }
+                if (newOtpMode && email && userType) handleSendOtp();
               }}
               className="text-amber-600 hover:text-orange-600 font-medium text-sm"
             >

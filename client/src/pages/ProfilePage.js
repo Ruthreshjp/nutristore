@@ -220,10 +220,10 @@ const ProfilePage = () => {
                 <div className="w-full bg-amber-200 rounded-full h-2.5 mt-2">
                   <div 
                     className="bg-amber-600 h-2.5 rounded-full" 
-                    style={{ width: `${profile.verified ? 100 : 85}%` }}
+                    style={{ width: `${profile.completionPercentage || 0}%` }}
                   ></div>
                 </div>
-                <p className="text-amber-900 text-sm mt-1">{profile.verified ? '100% Complete' : '85% Complete'}</p>
+                <p className="text-amber-900 text-sm mt-1">{profile.verified ? '100% Complete' : `${profile.completionPercentage || 0}% Complete`}</p>
               </div>
             </div>
           </div>
