@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { loadRazorpay } from '../utils/razorpay';
 import { Link } from 'react-router-dom';
 import { FaArrowLeft, FaCheck, FaTimes, FaComment, FaMoneyBillWave, FaTruck, FaShoppingBag, FaSync } from 'react-icons/fa';
+import { QRCodeSVG } from 'qrcode.react';
 
 function YourOrders() {
   const { user } = useAuth();
@@ -18,6 +18,9 @@ function YourOrders() {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [notificationStatus, setNotificationStatus] = useState({ orderId: null, success: null });
+  const [showPaymentConfirmation, setShowPaymentConfirmation] = useState(false);
+  const [upiId, setUpiId] = useState('');
+  const [instructions, setInstructions] = useState('');
 
   const fetchOrders = async () => {
     try {
@@ -41,7 +44,8 @@ function YourOrders() {
       if (response.ok) {
         const updatedOrders = result.map(order => ({
           ...order,
-          status: order.status || 'pending', // Ensure status is always defined
+          status: order.status || 'pending',
+          paymentMethod: order.paymentMethod || 'upi', // Default to 'upi' if not set
           expectedDeliveryDate: order.orderDate ? new Date(order.orderDate).setDate(new Date(order.orderDate).getDate() + 3) : null,
         })).sort((a, b) => new Date(b.orderDate) - new Date(a.orderDate));
         setOrders(updatedOrders);
@@ -73,43 +77,36 @@ function YourOrders() {
     return order.status === filter;
   });
 
-  const handlePayment = async (orderId, amount) => {
+  const handleUpiPayment = async (orderId, sellerName, totalPrice) => {
     try {
-      const razorpay = await loadRazorpay();
-      if (!razorpay) {
-        setError('Failed to load Razorpay SDK.');
-        return;
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('No authentication token found. Please log in.');
       }
-      const options = {
-        key: process.env.RAZORPAY_KEY_ID || 'YOUR_RAZORPAY_KEY',
-        amount: amount * 100,
-        currency: 'INR',
-        name: 'Nutri Store',
-        description: `Payment for Order #${orderId}`,
-        handler: async (response) => {
-          const verifyResponse = await fetch('http://localhost:5000/api/verify-payment', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${localStorage.getItem('token')}`,
-            },
-            body: JSON.stringify({ orderId, paymentId: response.razorpay_payment_id }),
-          });
-          if (verifyResponse.ok) {
-            alert('Payment verified! Awaiting producer approval.');
-            setOrders(orders.map(o => o._id === orderId ? { ...o, status: 'pending' } : o));
-          } else {
-            const result = await verifyResponse.json();
-            setError(result.message || 'Payment verification failed.');
-          }
-        },
-        prefill: { name: user?.name || 'Customer', email: user?.email || 'customer@example.com', contact: user?.mobileNumber || '9999999999' },
-        theme: { color: '#FF9D00' },
-      };
-      const rzp = new razorpay(options);
-      rzp.open();
+
+      const response = await fetch(`http://localhost:5000/api/get-upi-id?sellerName=${encodeURIComponent(sellerName)}`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`HTTP error! Status: ${response.status}, Response: ${text}`);
+      }
+
+      const data = await response.json();
+      const { upiId } = data;
+      if (!upiId) {
+        throw new Error('No UPI ID available for this seller');
+      }
+
+      setUpiId(upiId);
+      const upiData = `upi://pay?pa=${encodeURIComponent(upiId)}&am=${(totalPrice * 100).toFixed(0)}&tn=Payment%20for%20Order%20#${orderId}&cu=INR`;
+      setInstructions(`Scan this QR code with your UPI app (e.g., PhonePe, Paytm) to pay ₹${totalPrice} for Order #${orderId}. Right-click to download.`);
+
+      setSelectedOrder({ _id: orderId, totalPrice, sellerName });
+      setShowPaymentConfirmation(true);
     } catch (err) {
-      setError('Error initiating payment.');
+      setError(`Error initiating payment: ${err.message}`);
       console.error('Payment error:', err);
     }
   };
@@ -153,6 +150,17 @@ function YourOrders() {
     }
   };
 
+  const handlePaymentConfirmation = async (orderId, confirmed) => {
+    if (confirmed) {
+      fetchOrders(); // Refresh orders to reflect any backend updates
+      setError(null);
+    }
+    setShowPaymentConfirmation(false);
+    setSelectedOrder(null);
+    setUpiId('');
+    setInstructions('');
+  };
+
   const openOrderDetails = (order) => {
     setSelectedOrder(order);
   };
@@ -161,6 +169,9 @@ function YourOrders() {
     setSelectedOrder(null);
     setChatOpen(false);
     setNotificationStatus({ orderId: null, success: null });
+    setShowPaymentConfirmation(false);
+    setUpiId('');
+    setInstructions('');
   };
 
   const openChat = (order) => {
@@ -219,6 +230,7 @@ function YourOrders() {
     switch (status) {
       case 'accepted':
       case 'confirmed':
+      case 'paid':
         return <FaCheck className="text-green-500 inline mr-1" />;
       case 'declined':
         return <FaTimes className="text-red-500 inline mr-1" />;
@@ -249,26 +261,26 @@ function YourOrders() {
         </div>
 
         <div className="flex flex-wrap justify-center gap-2 mb-6">
-          <button 
-            onClick={() => setFilter('all')} 
+          <button
+            onClick={() => setFilter('all')}
             className={`px-4 py-2 rounded-full ${filter === 'all' ? 'bg-amber-500 text-white' : 'bg-white text-amber-700'} transition-all duration-300`}
           >
             All Orders
           </button>
-          <button 
-            onClick={() => setFilter('pending')} 
+          <button
+            onClick={() => setFilter('pending')}
             className={`px-4 py-2 rounded-full ${filter === 'pending' ? 'bg-amber-500 text-white' : 'bg-white text-amber-700'} transition-all duration-300`}
           >
             Pending
           </button>
-          <button 
-            onClick={() => setFilter('accepted')} 
+          <button
+            onClick={() => setFilter('accepted')}
             className={`px-4 py-2 rounded-full ${filter === 'accepted' ? 'bg-amber-500 text-white' : 'bg-white text-amber-700'} transition-all duration-300`}
           >
             Accepted
           </button>
-          <button 
-            onClick={() => setFilter('declined')} 
+          <button
+            onClick={() => setFilter('declined')}
             className={`px-4 py-2 rounded-full ${filter === 'declined' ? 'bg-amber-500 text-white' : 'bg-white text-amber-700'} transition-all duration-300`}
           >
             Declined
@@ -289,12 +301,12 @@ function YourOrders() {
             <div className="text-amber-500 text-6xl mb-4">📦</div>
             <h3 className="text-2xl font-semibold text-amber-900 mb-2">No orders found</h3>
             <p className="text-amber-700 mb-6">
-              {filter === 'all' 
-                ? "You haven't placed any orders yet." 
+              {filter === 'all'
+                ? "You haven't placed any orders yet."
                 : `You don't have any ${filter} orders.`}
             </p>
             {filter !== 'all' && (
-              <button 
+              <button
                 onClick={() => setFilter('all')}
                 className="bg-amber-500 hover:bg-amber-600 text-white font-medium py-2 px-6 rounded-lg transition-colors duration-300"
               >
@@ -302,7 +314,7 @@ function YourOrders() {
               </button>
             )}
             {filter === 'all' && (
-              <Link 
+              <Link
                 to="/products"
                 className="inline-block bg-amber-500 hover:bg-amber-600 text-white font-medium py-2 px-6 rounded-lg transition-colors duration-300"
               >
@@ -312,88 +324,91 @@ function YourOrders() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredOrders.map((order) => (
-              <div key={order._id} className="bg-white rounded-xl p-5 shadow-lg border border-amber-200 hover:shadow-xl transition-all duration-300">
-                <div className="flex justify-between items-start mb-4">
-                  <h2 className="text-lg font-semibold text-amber-900">Order #{order.orderId || order._id.substring(0, 8)}</h2>
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                    order.status === 'accepted' || order.status === 'confirmed' ? 'bg-green-100 text-green-800' :
-                    order.status === 'declined' ? 'bg-red-100 text-red-800' :
-                    'bg-amber-100 text-amber-800'
-                  }`}>
-                    {getStatusIcon(order.status)}
-                    {order.status || 'Pending'}
-                  </span>
-                </div>
-                
-                <div className="space-y-2 mb-4">
-                  <p className="text-amber-700 flex justify-between">
-                    <span>Total:</span>
-                    <span className="font-semibold">₹{order.totalPrice || order.total}</span>
-                  </p>
-                  <p className="text-amber-700">
-                    {order.items && order.items.length > 0 
-                      ? `${order.items.length} item${order.items.length > 1 ? 's' : ''}` 
-                      : '1 item'}
-                  </p>
-                  <p className="text-amber-700 text-sm">
-                    Ordered on: {new Date(order.orderDate).toLocaleDateString()}
-                  </p>
-                </div>
-
-                {order.paymentMethod !== 'cod' && order.status === 'pending' && user.userType === 'Consumer' && (
-                  <button
-                    onClick={() => handlePayment(order._id, order.totalPrice || order.total)}
-                    className="w-full mb-3 bg-amber-500 hover:bg-amber-600 text-white py-2 rounded-lg transition-colors duration-300 flex items-center justify-center"
-                  >
-                    <FaMoneyBillWave className="mr-2" /> Pay Now
-                  </button>
-                )}
-                
-                {user.userType === 'Producer' && order.status === 'pending' && order.sellerName === user.username && (
-                  <div className="grid grid-cols-2 gap-2 mb-3">
-                    <button
-                      onClick={() => handleAction(order._id, 'accepted')}
-                      className={`bg-green-500 hover:bg-green-600 text-white py-2 rounded-lg transition-colors duration-300 flex items-center justify-center ${loadingAction === order._id ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      disabled={loadingAction === order._id}
-                    >
-                      {loadingAction === order._id ? '...' : <><FaCheck className="mr-1" /> Accept</>}
-                    </button>
-                    <button
-                      onClick={() => handleAction(order._id, 'declined')}
-                      className={`bg-red-500 hover:bg-red-600 text-white py-2 rounded-lg transition-colors duration-300 flex items-center justify-center ${loadingAction === order._id ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      disabled={loadingAction === order._id}
-                    >
-                      {loadingAction === order._id ? '...' : <><FaTimes className="mr-1" /> Decline</>}
-                    </button>
+            {filteredOrders.map((order) => {
+              console.log('Order data:', order, 'User type:', user.userType); // Enhanced debug log
+              return (
+                <div key={order._id} className="bg-white rounded-xl p-5 shadow-lg border border-amber-200 hover:shadow-xl transition-all duration-300">
+                  <div className="flex justify-between items-start mb-4">
+                    <h2 className="text-lg font-semibold text-amber-900">Order #{order.orderId || order._id.substring(0, 8)}</h2>
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                      order.status === 'accepted' || order.status === 'confirmed' || order.status === 'paid' ? 'bg-green-100 text-green-800' :
+                      order.status === 'declined' ? 'bg-red-100 text-red-800' :
+                      'bg-amber-100 text-amber-800'
+                    }`}>
+                      {getStatusIcon(order.status)}
+                      {order.status || 'Pending'}
+                    </span>
                   </div>
-                )}
-                
-                {notificationStatus.orderId === order._id && (
-                  <div className={`mt-2 text-sm ${notificationStatus.success ? 'text-green-600' : 'text-red-600'}`}>
-                    {notificationStatus.success ? 'Notification sent to buyer!' : 'Failed to send notification.'}
+                  
+                  <div className="space-y-2 mb-4">
+                    <p className="text-amber-700 flex justify-between">
+                      <span>Total:</span>
+                      <span className="font-semibold">₹{order.totalPrice || order.total}</span>
+                    </p>
+                    <p className="text-amber-700">
+                      {order.items && order.items.length > 0
+                        ? `${order.items.length} item${order.items.length > 1 ? 's' : ''}`
+                        : '1 item'}
+                    </p>
+                    <p className="text-amber-700 text-sm">
+                      Ordered on: {new Date(order.orderDate).toLocaleDateString()}
+                    </p>
                   </div>
-                )}
 
-                <div className="flex space-x-2">
-                  <button
-                    onClick={() => openOrderDetails(order)}
-                    className="flex-1 bg-amber-100 hover:bg-amber-200 text-amber-800 py-2 rounded-lg transition-colors duration-300"
-                  >
-                    Details
-                  </button>
-                  {(order.status === 'accepted' || order.status === 'confirmed') && (
+                  {user.userType === 'Consumer' && order.paymentMethod !== 'cod' && (
                     <button
-                      onClick={() => openChat(order)}
-                      className="bg-purple-100 hover:bg-purple-200 text-purple-800 p-2 rounded-lg transition-colors duration-300"
-                      title="Chat"
+                      onClick={() => handleUpiPayment(order._id, order.sellerName, order.totalPrice || order.total)}
+                      className="w-full mb-3 bg-amber-500 hover:bg-amber-600 text-white py-2 rounded-lg transition-colors duration-300 flex items-center justify-center"
                     >
-                      <FaComment />
+                      <FaMoneyBillWave className="mr-2" /> Pay Now
                     </button>
                   )}
+                  
+                  {user.userType === 'Producer' && order.status === 'pending' && order.sellerName === user.username && (
+                    <div className="grid grid-cols-2 gap-2 mb-3">
+                      <button
+                        onClick={() => handleAction(order._id, 'accepted')}
+                        className={`bg-green-500 hover:bg-green-600 text-white py-2 rounded-lg transition-colors duration-300 flex items-center justify-center ${loadingAction === order._id ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        disabled={loadingAction === order._id}
+                      >
+                        {loadingAction === order._id ? '...' : <><FaCheck className="mr-1" /> Accept</>}
+                      </button>
+                      <button
+                        onClick={() => handleAction(order._id, 'declined')}
+                        className={`bg-red-500 hover:bg-red-600 text-white py-2 rounded-lg transition-colors duration-300 flex items-center justify-center ${loadingAction === order._id ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        disabled={loadingAction === order._id}
+                      >
+                        {loadingAction === order._id ? '...' : <><FaTimes className="mr-1" /> Decline</>}
+                      </button>
+                    </div>
+                  )}
+                  
+                  {notificationStatus.orderId === order._id && (
+                    <div className={`mt-2 text-sm ${notificationStatus.success ? 'text-green-600' : 'text-red-600'}`}>
+                      {notificationStatus.success ? 'Notification sent to buyer!' : 'Failed to send notification.'}
+                    </div>
+                  )}
+
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => openOrderDetails(order)}
+                      className="flex-1 bg-amber-100 hover:bg-amber-200 text-amber-800 py-2 rounded-lg transition-colors duration-300"
+                    >
+                      Details
+                    </button>
+                    {(order.status === 'accepted' || order.status === 'confirmed' || order.status === 'paid') && (
+                      <button
+                        onClick={() => openChat(order)}
+                        className="bg-purple-100 hover:bg-purple-200 text-purple-800 p-2 rounded-lg transition-colors duration-300"
+                        title="Chat"
+                      >
+                        <FaComment />
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -458,7 +473,7 @@ function YourOrders() {
               <div className="flex items-center">
                 <span className="font-medium text-amber-800 mr-2">Status:</span>
                 <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                  selectedOrder.status === 'accepted' || selectedOrder.status === 'confirmed' ? 'bg-green-100 text-green-800' :
+                  selectedOrder.status === 'accepted' || selectedOrder.status === 'confirmed' || selectedOrder.status === 'paid' ? 'bg-green-100 text-green-800' :
                   selectedOrder.status === 'declined' ? 'bg-red-100 text-red-800' :
                   'bg-amber-100 text-amber-800'
                 }`}>
@@ -500,14 +515,73 @@ function YourOrders() {
                 </div>
               )}
 
-              {(selectedOrder.status === 'accepted' || selectedOrder.status === 'confirmed') && (
+              {selectedOrder.status === 'accepted' && user.userType === 'Consumer' && selectedOrder.paymentMethod !== 'cod' && (
+                <button
+                  onClick={() => handleUpiPayment(selectedOrder._id, selectedOrder.sellerName, selectedOrder.totalPrice || selectedOrder.total)}
+                  className="w-full mt-2 bg-green-500 hover:bg-green-600 text-white py-2 rounded-lg transition-colors duration-300 flex items-center justify-center"
+                >
+                  <FaMoneyBillWave className="mr-2" /> Pay Now
+                </button>
+              )}
+
+              {(selectedOrder.status === 'accepted' || selectedOrder.status === 'confirmed' || selectedOrder.status === 'paid') && (
                 <button
                   onClick={() => openChat(selectedOrder)}
-                  className="w-full bg-purple-500 hover:bg-purple-600 text-white py-2 rounded-lg transition-colors duration-300 flex items-center justify-center"
+                  className="w-full mt-2 bg-purple-500 hover:bg-purple-600 text-white py-2 rounded-lg transition-colors duration-300 flex items-center justify-center"
                 >
                   <FaComment className="mr-2" /> Open Chat
                 </button>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showPaymentConfirmation && selectedOrder && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fadeIn">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md border border-green-200 shadow-2xl relative overflow-auto max-h-[90vh]">
+            <button
+              onClick={() => setShowPaymentConfirmation(false)}
+              className="absolute top-4 right-4 text-gray-500 hover:text-green-700 transition-colors duration-300 text-xl"
+            >
+              ✕
+            </button>
+            
+            <h2 className="text-2xl font-bold text-green-900 mb-6 flex items-center">
+              <FaMoneyBillWave className="mr-2 text-green-600" /> Payment Confirmation
+            </h2>
+            
+            <div className="space-y-4 text-center">
+              <p><strong>Order ID:</strong> {selectedOrder._id}</p>
+              <p><strong>Amount to Pay:</strong> ₹{selectedOrder.totalPrice || selectedOrder.total}</p>
+              <p><strong>Seller UPI ID:</strong> {upiId}</p>
+              {upiId && (
+                <>
+                  <QRCodeSVG value={`upi://pay?pa=${encodeURIComponent(upiId)}&am=${(selectedOrder.totalPrice * 100).toFixed(0)}&tn=Payment%20for%20Order%20#${selectedOrder._id}&cu=INR`} size={200} style={{ margin: '0 auto' }} />
+                  <p className="text-green-700">{instructions}</p>
+                  <a
+                    href={`data:image/png;base64,${new QRCode(`upi://pay?pa=${encodeURIComponent(upiId)}&am=${(selectedOrder.totalPrice * 100).toFixed(0)}&tn=Payment%20for%20Order%20#${selectedOrder._id}&cu=INR`).toDataURL().split(',')[1]}`}
+                    download={`payment_qr_order_${selectedOrder._id}.png`}
+                    className="mt-2 inline-block bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded-lg transition-colors duration-300"
+                  >
+                    Download QR Code
+                  </a>
+                </>
+              )}
+              <div className="flex justify-end space-x-4 mt-6">
+                <button
+                  onClick={() => handlePaymentConfirmation(selectedOrder._id, true)}
+                  className="bg-green-500 hover:bg-green-600 text-white py-2 px-6 rounded-lg transition-colors duration-300"
+                >
+                  Confirm Payment
+                </button>
+                <button
+                  onClick={() => setShowPaymentConfirmation(false)}
+                  className="bg-gray-300 hover:bg-gray-400 text-gray-800 py-2 px-6 rounded-lg transition-colors duration-300"
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           </div>
         </div>
