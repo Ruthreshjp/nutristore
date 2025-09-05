@@ -21,6 +21,7 @@ function YourOrders() {
   const [showPaymentConfirmation, setShowPaymentConfirmation] = useState(false);
   const [upiId, setUpiId] = useState('');
   const [instructions, setInstructions] = useState('');
+  const [transactionId, setTransactionId] = useState(''); // For optional transaction ID input
 
   const fetchOrders = async () => {
     try {
@@ -95,12 +96,13 @@ function YourOrders() {
 
       const data = await response.json();
       const { upiId } = data;
+      console.log('UPI ID fetched:', upiId); // Debug log
       if (!upiId) {
         throw new Error('No UPI ID available for this seller');
       }
 
       setUpiId(upiId);
-      const upiData = `upi://pay?pa=${encodeURIComponent(upiId)}&am=${(totalPrice * 100).toFixed(0)}&tn=Payment%20for%20Order%20#${orderId}&cu=INR`;
+      const upiData = `upi://pay?pa=${encodeURIComponent(upiId)}&am=${totalPrice}&tn=Payment%20for%20Order%20#${orderId}&cu=INR`; // Use totalPrice directly (in rupees)
       setInstructions(`Scan this QR code with your UPI app (e.g., PhonePe, Paytm) to pay ₹${totalPrice} for Order #${orderId}. Right-click to download.`);
 
       setSelectedOrder({ _id: orderId, totalPrice, sellerName });
@@ -152,13 +154,16 @@ function YourOrders() {
 
   const handlePaymentConfirmation = async (orderId, confirmed) => {
     if (confirmed) {
-      fetchOrders(); // Refresh orders to reflect any backend updates
+      setOrders(orders.map(o => o._id === orderId ? { ...o, status: 'paid' } : o)); // Local update
+      fetchOrders(); // Sync with backend
       setError(null);
+      alert('Payment confirmed locally. Please share the transaction ID with the seller via chat for verification.');
     }
     setShowPaymentConfirmation(false);
     setSelectedOrder(null);
     setUpiId('');
     setInstructions('');
+    setTransactionId(''); // Reset transaction ID
   };
 
   const openOrderDetails = (order) => {
@@ -172,6 +177,7 @@ function YourOrders() {
     setShowPaymentConfirmation(false);
     setUpiId('');
     setInstructions('');
+    setTransactionId('');
   };
 
   const openChat = (order) => {
@@ -325,7 +331,7 @@ function YourOrders() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredOrders.map((order) => {
-              console.log('Order data:', order, 'User type:', user.userType); // Enhanced debug log
+              console.log('Order data:', order, 'User type:', user.userType); // Debug log
               return (
                 <div key={order._id} className="bg-white rounded-xl p-5 shadow-lg border border-amber-200 hover:shadow-xl transition-all duration-300">
                   <div className="flex justify-between items-start mb-4">
@@ -355,7 +361,7 @@ function YourOrders() {
                     </p>
                   </div>
 
-                  {user.userType === 'Consumer' && order.paymentMethod !== 'cod' && (
+                  {user.userType === 'Consumer' && (
                     <button
                       onClick={() => handleUpiPayment(order._id, order.sellerName, order.totalPrice || order.total)}
                       className="w-full mb-3 bg-amber-500 hover:bg-amber-600 text-white py-2 rounded-lg transition-colors duration-300 flex items-center justify-center"
@@ -515,7 +521,7 @@ function YourOrders() {
                 </div>
               )}
 
-              {selectedOrder.status === 'accepted' && user.userType === 'Consumer' && selectedOrder.paymentMethod !== 'cod' && (
+              {user.userType === 'Consumer' && selectedOrder.paymentMethod !== 'cod' && (
                 <button
                   onClick={() => handleUpiPayment(selectedOrder._id, selectedOrder.sellerName, selectedOrder.totalPrice || selectedOrder.total)}
                   className="w-full mt-2 bg-green-500 hover:bg-green-600 text-white py-2 rounded-lg transition-colors duration-300 flex items-center justify-center"
@@ -557,17 +563,17 @@ function YourOrders() {
               <p><strong>Seller UPI ID:</strong> {upiId}</p>
               {upiId && (
                 <>
-                  <QRCodeSVG value={`upi://pay?pa=${encodeURIComponent(upiId)}&am=${(selectedOrder.totalPrice * 100).toFixed(0)}&tn=Payment%20for%20Order%20#${selectedOrder._id}&cu=INR`} size={200} style={{ margin: '0 auto' }} />
+                  <QRCodeSVG value={`upi://pay?pa=${encodeURIComponent(upiId)}&am=${selectedOrder.totalPrice || selectedOrder.total}&tn=Payment%20for%20Order%20#${selectedOrder._id}&cu=INR`} size={200} style={{ margin: '0 auto' }} />
                   <p className="text-green-700">{instructions}</p>
-                  <a
-                    href={`data:image/png;base64,${new QRCode(`upi://pay?pa=${encodeURIComponent(upiId)}&am=${(selectedOrder.totalPrice * 100).toFixed(0)}&tn=Payment%20for%20Order%20#${selectedOrder._id}&cu=INR`).toDataURL().split(',')[1]}`}
-                    download={`payment_qr_order_${selectedOrder._id}.png`}
-                    className="mt-2 inline-block bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded-lg transition-colors duration-300"
-                  >
-                    Download QR Code
-                  </a>
                 </>
               )}
+              <input
+                type="text"
+                value={transactionId}
+                onChange={(e) => setTransactionId(e.target.value)}
+                placeholder="Enter Transaction ID (optional)"
+                className="w-full p-2 border border-green-300 rounded-lg mb-4"
+              />
               <div className="flex justify-end space-x-4 mt-6">
                 <button
                   onClick={() => handlePaymentConfirmation(selectedOrder._id, true)}

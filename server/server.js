@@ -115,7 +115,8 @@ const orderSchema = new mongoose.Schema({
   totalPrice: { type: Number, required: true },
   deliveryAddress: { type: String, required: true },
   paymentMethod: { type: String, required: true },
-  status: { type: String, enum: ['pending', 'accepted', 'confirmed', 'declined'], default: 'pending' },
+  transactionId: { type: String, required: true }, // Made transactionId required
+  status: { type: String, enum: ['pending', 'accepted', 'confirmed', 'paid', 'declined'], default: 'pending' },
   orderDate: { type: Date, default: Date.now },
 });
 const Order = mongoose.model('Order', orderSchema);
@@ -289,7 +290,6 @@ app.post('/api/signup', async (req, res) => {
     });
     await newUser.save();
 
-    // Create initial profile
     const profile = new Profile({ userId: newUser._id, name, mobile: mobileNumber, email, address, occupation });
     await profile.save();
 
@@ -315,7 +315,6 @@ app.post('/api/login', async (req, res) => {
     user.refreshToken = refreshToken;
     await user.save();
 
-    // Fetch profile for completion status
     const profile = await Profile.findOne({ userId: user._id }) || new Profile({ userId: user._id });
     const requiredFields = ['name', 'mobile', 'email', 'address', 'occupation', 'photo'];
     const roleSpecificFields = userType === 'Producer' ? ['kisanCard', 'farmerId'] : [];
@@ -363,7 +362,7 @@ app.post('/api/send-otp', async (req, res) => {
     const user = await User.findOne({ email });
     if (!user) return res.status(404).json({ message: 'User not found' });
 
-    console.log(`Sending OTP for email: ${email}, userType: ${userType}, stored userType: ${user.userType}`); // Debug log
+    console.log(`Sending OTP for email: ${email}, userType: ${userType}, stored userType: ${user.userType}`);
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     user.otp = otp;
@@ -392,10 +391,8 @@ app.post('/api/verify-otp', async (req, res) => {
     const user = await User.findOne({ email });
     if (!user) return res.status(404).json({ message: 'User not found' });
 
-    // Log the received and stored user types for debugging
     console.log(`Verifying OTP for email: ${email}, received userType: ${userType}, stored userType: ${user.userType}`);
 
-    // Warn on mismatch but proceed with stored userType
     if (userType && user.userType !== userType) {
       console.warn(`User type mismatch: received ${userType}, stored ${user.userType}. Using stored userType.`);
     }
@@ -435,6 +432,7 @@ app.post('/api/verify-otp', async (req, res) => {
     res.status(500).json({ message: 'OTP verification failed', error: err.message });
   }
 });
+
 app.post('/api/send-action-otp', authenticateToken, async (req, res) => {
   try {
     const user = await User.findOne({ username: req.user.sellerName });
@@ -539,8 +537,8 @@ app.put('/api/profile', authenticateToken, uploadProfile, async (req, res) => {
     if (req.user.userType === 'Producer') {
       profile.kisanCard = kisanCard || profile.kisanCard;
       profile.farmerId = farmerId || profile.farmerId;
+      profile.upiId = upiId || profile.upiId;
     }
-    profile.upiId = upiId || profile.upiId;
     if (req.file) {
       profile.photo = `/Uploads/${req.file.filename}`;
     }
@@ -927,10 +925,14 @@ app.post('/api/add-to-cart/:productId', authenticateToken, async (req, res) => {
 });
 
 app.post('/api/place-order', authenticateToken, async (req, res) => {
-  const { cart, deliveryAddress, paymentMethod, total } = req.body;
+  const { cart, deliveryAddress, paymentMethod, total, transactionId } = req.body;
   try {
-    if (!deliveryAddress || !paymentMethod || !cart || cart.length === 0) {
-      return res.status(400).json({ message: 'Missing required fields' });
+    if (!deliveryAddress || !paymentMethod || !cart || cart.length === 0 || !transactionId) {
+      return res.status(400).json({ message: 'Missing required fields: deliveryAddress, paymentMethod, cart, and transactionId are required' });
+    }
+
+    if (!['upi', 'cod'].includes(paymentMethod)) {
+      return res.status(400).json({ message: 'Invalid payment method. Use "upi" or "cod"' });
     }
 
     const orderId = `ORD_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
@@ -960,6 +962,7 @@ app.post('/api/place-order', authenticateToken, async (req, res) => {
         totalPrice: itemTotalPrice,
         deliveryAddress,
         paymentMethod,
+        transactionId, // Assign the transactionId to each order
         orderDate: new Date(),
       });
       await order.save();
@@ -985,13 +988,25 @@ app.post('/api/place-order', authenticateToken, async (req, res) => {
       return res.status(400).json({ message: 'Total amount mismatch' });
     }
 
-    res.json({ message: 'Order placed successfully', orderId, status: 'pending', redirect: '/your-orders' });
+    // Convert total to paise before sending to frontend
+    const totalInPaise = parseFloat(total) * 100;
+
+    // Log the total for debugging
+    console.log(`Order total in rupees: ${total}, total in paise: ${totalInPaise}, transactionId: ${transactionId}`);
+
+    res.json({ 
+      message: 'Order placed successfully', 
+      orderId, 
+      status: 'pending', 
+      redirect: '/your-orders',
+      total: totalInPaise, // Send total in paise
+      paymentNote: 'The amount is provided in paise. Pass this value directly to your UPI integration.'
+    });
   } catch (err) {
     console.error('Place order error:', err.message);
     res.status(500).json({ message: 'Error placing order', error: err.message });
   }
 });
-
 app.post('/api/confirm-order/:orderId', authenticateToken, async (req, res) => {
   try {
     const { orderId } = req.params;
@@ -1005,7 +1020,7 @@ app.post('/api/confirm-order/:orderId', authenticateToken, async (req, res) => {
       return res.status(400).json({ message: 'Order is not in a pending state' });
     }
 
-    let notification = await Notification.findOne({ orderId: order._id });
+    let notification = await Notification.findOne({ orderId: order._id, buyerUsername: order.buyerUsername });
     if (!notification) {
       notification = new Notification({
         orderId: order._id,
@@ -1037,7 +1052,32 @@ app.post('/api/confirm-order/:orderId', authenticateToken, async (req, res) => {
 });
 
 app.post('/api/verify-payment', authenticateToken, async (req, res) => {
-  res.status(400).json({ message: 'Payment verification not supported without payment gateway' });
+  // Placeholder for future payment gateway integration
+  res.status(400).json({ message: 'Payment verification not supported without payment gateway. Use chat to confirm with the seller.' });
+});
+
+app.get('/api/get-upi-id', authenticateToken, async (req, res) => {
+  try {
+    const { sellerName } = req.query;
+    if (!sellerName) {
+      return res.status(400).json({ message: 'Seller name is required' });
+    }
+
+    const seller = await User.findOne({ username: sellerName }).lean();
+    if (!seller) {
+      return res.status(404).json({ message: 'Seller not found' });
+    }
+
+    const profile = await Profile.findOne({ userId: seller._id }).lean();
+    if (!profile || !profile.upiId) {
+      return res.status(404).json({ message: 'UPI ID not found for this seller' });
+    }
+
+    res.json({ upiId: profile.upiId });
+  } catch (err) {
+    console.error('Fetch UPI ID error:', err.message);
+    res.status(500).json({ message: 'Error fetching UPI ID', error: err.message });
+  }
 });
 
 app.get('/api/notifications', authenticateToken, async (req, res) => {
@@ -1140,6 +1180,7 @@ app.get('/api/your-orders', authenticateToken, async (req, res) => {
         deliveryAddress: order.deliveryAddress,
         mobileNo,
         paymentMethod: order.paymentMethod,
+        transactionId: order.transactionId, // Include transactionId in response
         status: order.status,
         orderDate: order.orderDate,
         expectedDeliveryDate,
